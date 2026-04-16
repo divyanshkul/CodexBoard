@@ -127,7 +127,7 @@ export function TicketCard({ ticket, onStartBuild, onApprove, onReject, onClick 
             {enabledOutputs.length > 0 && (
               <div className="flex items-center gap-1.5">
                 {enabledOutputs.map(o => (
-                  <o.icon key={o.key} size={12} className="text-[var(--color-text-muted)]" title={o.label} />
+                  <o.icon key={o.key} size={12} className="text-[var(--color-text-muted)]" aria-label={o.label} />
                 ))}
               </div>
             )}
