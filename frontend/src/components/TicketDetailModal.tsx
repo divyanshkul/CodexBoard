@@ -283,21 +283,10 @@ export function TicketDetailModal({
           {activeTab === "logs" && <AgentLogFeed logs={ticket.agent_logs} />}
           {activeTab === "outputs" && (
             <div className="space-y-6">
+              {/* 1. Screenshots (before/after) */}
               <ScreenshotViewer ticketId={ticket.id} outputs={ticket.outputs} />
-              {ticket.outputs.video_path && (
-                <VideoPlayer ticketId={ticket.id} videoPath={ticket.outputs.video_path} />
-              )}
-              {ticket.outputs.remotion_video_path && (
-                <div>
-                  <h4 className="text-[13px] font-semibold text-text-primary mb-2">
-                    Demo Summary Video
-                  </h4>
-                  <VideoPlayer ticketId={ticket.id} videoPath={ticket.outputs.remotion_video_path} />
-                </div>
-              )}
-              {ticket.outputs.markdown_path && (
-                <MarkdownViewer ticketId={ticket.id} path={ticket.outputs.markdown_path} />
-              )}
+
+              {/* 2. PDF Delivery Report */}
               {ticket.outputs.pdf_path && (
                 <div>
                   <h4 className="text-[13px] font-semibold text-text-primary mb-2">
@@ -324,6 +313,31 @@ export function TicketDetailModal({
                     Open PDF Report (4 slides)
                   </a>
                 </div>
+              )}
+
+              {/* 3. Demo Summary Video (Remotion) */}
+              {ticket.outputs.remotion_video_path && (
+                <div>
+                  <h4 className="text-[13px] font-semibold text-text-primary mb-2">
+                    Demo Summary Video
+                  </h4>
+                  <VideoPlayer ticketId={ticket.id} videoPath={ticket.outputs.remotion_video_path} />
+                </div>
+              )}
+
+              {/* 4. Walkthrough Video */}
+              {ticket.outputs.video_path && (
+                <div>
+                  <h4 className="text-[13px] font-semibold text-text-primary mb-2">
+                    Walkthrough Recording
+                  </h4>
+                  <VideoPlayer ticketId={ticket.id} videoPath={ticket.outputs.video_path} />
+                </div>
+              )}
+
+              {/* 5. Markdown Summary */}
+              {ticket.outputs.markdown_path && (
+                <MarkdownViewer ticketId={ticket.id} path={ticket.outputs.markdown_path} />
               )}
             </div>
           )}

@@ -54,10 +54,13 @@ class DevServerManager:
         # Step 2: Ensure node_modules exists (worktrees don't have them)
         await _ensure_node_modules(cwd)
 
-        # Step 3: Set up environment
+        # Step 3: Set up environment with node_modules/.bin in PATH
         env = os.environ.copy()
         env["PORT"] = str(port)
         env["BROWSER"] = "none"  # prevent Vite auto-open
+        # Ensure node_modules/.bin is in PATH so vite/npx are found
+        node_bin = str(Path(cwd) / "node_modules" / ".bin")
+        env["PATH"] = f"{node_bin}:{env.get('PATH', '')}"
 
         # Step 4: Build command with port flag
         full_command = f"{command} -- --port {port}"

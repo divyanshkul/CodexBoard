@@ -317,47 +317,226 @@ async def _prepare_worktree(ticket: Ticket) -> str:
 # ------------------------------------------------------------------
 
 async def _run_mock_build(ticket: Ticket, manager: ConnectionManager) -> Ticket:
+    """Simulate a realistic Codex build with detailed logs and timing."""
+    D = 4.0  # delay multiplier -- ~2 min total build time for demo
+
+    async def _log(msg: str, log_type: str = "agent_message") -> None:
+        entry = AgentLog(type=log_type, message=msg)
+        append_log(ticket.id, entry)
+        await manager.send_ticket_event("agent_log", ticket.id, {"log": entry.model_dump()})
+
+    async def _plan(steps: list[PlanStep], explanation: str) -> None:
+        nonlocal ticket
+        ticket = update_ticket(ticket.id, agent_plan=steps)
+        await manager.send_ticket_event(
+            "agent_plan_updated", ticket.id,
+            {"plan": [s.model_dump() for s in steps], "explanation": explanation},
+        )
+
+    async def _diff(diff_text: str) -> None:
+        nonlocal ticket
+        ticket = update_ticket(ticket.id, agent_diff=diff_text)
+        await manager.send_ticket_event("agent_diff_updated", ticket.id, {"diff": diff_text})
+
+    # ---- Phase 1: Analyze ----
     plan = [
-        PlanStep(step="Analyze codebase structure", status=PlanStepStatus.IN_PROGRESS),
-        PlanStep(step="Implement backend contract", status=PlanStepStatus.PENDING),
-        PlanStep(step="Write tests and verify", status=PlanStepStatus.PENDING),
+        PlanStep(step="Analyze codebase and requirements", status=PlanStepStatus.IN_PROGRESS),
+        PlanStep(step="Create component and styling", status=PlanStepStatus.PENDING),
+        PlanStep(step="Wire state management and persistence", status=PlanStepStatus.PENDING),
+        PlanStep(step="Verify build and lint", status=PlanStepStatus.PENDING),
     ]
-    ticket = update_ticket(ticket.id, agent_plan=plan)
-    await manager.send_ticket_event(
-        "agent_plan_updated",
-        ticket.id,
-        {"plan": [step.model_dump() for step in plan], "explanation": "Working through the backend implementation plan."},
-    )
-    await asyncio.sleep(0.01)
+    await _plan(plan, "Starting by understanding the existing codebase structure.")
+    await asyncio.sleep(D * 0.8)
 
-    first_log = AgentLog(type="agent_message", message="Analyzing the codebase and shared contract.")
-    ticket = append_log(ticket.id, first_log)
-    await manager.send_ticket_event("agent_log", ticket.id, {"log": first_log.model_dump()})
+    await _log(f"Inspecting the project to understand the routing and styling setup.")
+    await asyncio.sleep(D * 0.5)
 
+    await _log("Running: /bin/zsh -lc 'pwd && rg --files'", "command")
+    await asyncio.sleep(D * 0.3)
+    await _log("completed: /bin/zsh -lc 'pwd && rg --files' (exit 0)", "command")
+
+    await asyncio.sleep(D * 0.4)
+    await _log("Running: /bin/zsh -lc \"sed -n '1,220p' src/App.tsx\"", "command")
+    await asyncio.sleep(D * 0.3)
+    await _log("completed: /bin/zsh -lc \"sed -n '1,220p' src/App.tsx\" (exit 0)", "command")
+
+    await asyncio.sleep(D * 0.3)
+    await _log("Running: /bin/zsh -lc \"sed -n '1,260p' src/App.css\"", "command")
+    await asyncio.sleep(D * 0.2)
+    await _log("completed: /bin/zsh -lc \"sed -n '1,260p' src/App.css\" (exit 0)", "command")
+
+    await asyncio.sleep(D * 0.3)
+    await _log("Running: /bin/zsh -lc \"sed -n '1,200p' src/index.css\"", "command")
+    await asyncio.sleep(D * 0.2)
+    await _log("completed: /bin/zsh -lc \"sed -n '1,200p' src/index.css\" (exit 0)", "command")
+
+    await asyncio.sleep(D * 0.3)
+    await _log("Running: /bin/zsh -lc \"sed -n '1,200p' src/main.tsx\"", "command")
+    await asyncio.sleep(D * 0.2)
+    await _log("completed: /bin/zsh -lc \"sed -n '1,200p' src/main.tsx\" (exit 0)", "command")
+
+    await asyncio.sleep(D * 0.3)
+    await _log("Running: /bin/zsh -lc 'cat tsconfig.json'", "command")
+    await asyncio.sleep(D * 0.15)
+    await _log("completed: /bin/zsh -lc 'cat tsconfig.json' (exit 0)", "command")
+
+    await asyncio.sleep(D * 0.4)
+    await _log(f"Found a Vite app with the main UI in src/App.tsx. Styling is split between App.css and index.css. The app uses standard React with no routing library. I have enough context to implement the feature.")
+
+    await asyncio.sleep(D * 0.3)
+    await _log("Running: /bin/zsh -lc 'cat package.json'", "command")
+    await asyncio.sleep(D * 0.15)
+    await _log("completed: /bin/zsh -lc 'cat package.json' (exit 0)", "command")
+
+    await asyncio.sleep(D * 0.3)
+    await _log("Running: /bin/zsh -lc 'git status --short'", "command")
+    await asyncio.sleep(D * 0.15)
+    await _log("completed: /bin/zsh -lc 'git status --short' (exit 0)", "command")
+
+    # ---- Phase 2: Create component ----
     plan[0].status = PlanStepStatus.COMPLETED
     plan[1].status = PlanStepStatus.IN_PROGRESS
+    await _plan(plan, "Codebase analyzed. Now creating the component and styles.")
+    await asyncio.sleep(D * 0.4)
+
+    await _log("I have the structure now. I'm switching the app from media-query-only theming to an explicit data-theme model, adding a visible toggle on the main page, and initializing the theme before render so the saved mode survives refresh.")
+    await asyncio.sleep(D * 0.5)
+
+    await _log("I'm creating a new ThemeToggle component and updating the CSS custom properties. Using a data-theme attribute on the root element so the switch is clean and maintainable.")
+    await asyncio.sleep(D * 0.5)
+
     diff = (
-        "diff --git a/backend/main.py b/backend/main.py\n"
-        "--- /dev/null\n"
-        "+++ b/backend/main.py\n"
-        "@@ -0,0 +1,2 @@\n"
-        "+from fastapi import FastAPI\n"
-        "+app = FastAPI()\n"
+        "diff --git a/src/App.tsx b/src/App.tsx\n"
+        "--- a/src/App.tsx\n"
+        "+++ b/src/App.tsx\n"
+        "@@ -1,8 +1,42 @@\n"
+        "+import { useState, useEffect } from 'react'\n"
+        " import './App.css'\n"
+        " \n"
+        "+const THEME_KEY = 'app-theme'\n"
+        "+\n"
+        "+function ThemeToggle({ dark, onToggle }: { dark: boolean; onToggle: () => void }) {\n"
+        "+  return (\n"
+        "+    <button className=\"theme-toggle\" onClick={onToggle}>\n"
+        "+      {dark ? '☀️ Light' : '🌙 Dark'}\n"
+        "+    </button>\n"
+        "+  )\n"
+        "+}\n"
+        "+\n"
+        " function App() {\n"
+        "+  const [dark, setDark] = useState(() => localStorage.getItem(THEME_KEY) === 'dark')\n"
+        "+\n"
+        "+  useEffect(() => {\n"
+        "+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')\n"
+        "+    localStorage.setItem(THEME_KEY, dark ? 'dark' : 'light')\n"
+        "+  }, [dark])\n"
+        "+\n"
+        "   return (\n"
+        "-    <div className=\"app\">\n"
+        "+    <div className=\"app\" data-theme={dark ? 'dark' : 'light'}>\n"
+        "+      <ThemeToggle dark={dark} onToggle={() => setDark(!dark)} />\n"
     )
-    ticket = update_ticket(ticket.id, agent_plan=plan, agent_diff=diff)
-    await manager.send_ticket_event(
-        "agent_plan_updated",
-        ticket.id,
-        {"plan": [step.model_dump() for step in plan], "explanation": "Core API and WebSocket layers are in progress."},
+    await _log("Updated files: src/App.tsx, src/App.css, src/index.css", "file_change")
+    await _diff(diff)
+    await asyncio.sleep(D * 0.6)
+
+    diff += (
+        "diff --git a/src/App.css b/src/App.css\n"
+        "--- a/src/App.css\n"
+        "+++ b/src/App.css\n"
+        "@@ -1,4 +1,38 @@\n"
+        "+:root {\n"
+        "+  --bg: #ffffff;\n"
+        "+  --text: #1a1a1a;\n"
+        "+  --card-bg: #f9fafb;\n"
+        "+}\n"
+        "+\n"
+        "+[data-theme='dark'] {\n"
+        "+  --bg: #0f172a;\n"
+        "+  --text: #e2e8f0;\n"
+        "+  --card-bg: #1e293b;\n"
+        "+}\n"
+        "+\n"
+        "+.theme-toggle {\n"
+        "+  padding: 8px 16px;\n"
+        "+  border-radius: 8px;\n"
+        "+  border: 1px solid var(--text);\n"
+        "+  background: var(--card-bg);\n"
+        "+  color: var(--text);\n"
+        "+  cursor: pointer;\n"
+        "+  font-size: 14px;\n"
+        "+}\n"
     )
-    await manager.send_ticket_event("agent_diff_updated", ticket.id, {"diff": diff})
+    await _log("Updated files: src/App.css (+38 lines)", "file_change")
+    await _diff(diff)
 
-    second_log = AgentLog(type="file_change", message="Created backend runtime modules and tests.")
-    ticket = append_log(ticket.id, second_log)
-    await manager.send_ticket_event("agent_log", ticket.id, {"log": second_log.model_dump()})
+    await asyncio.sleep(D * 0.4)
+    await _log("Running: /bin/zsh -lc \"sed -n '1,240p' src/App.tsx\"", "command")
+    await asyncio.sleep(D * 0.2)
+    await _log("completed: /bin/zsh -lc \"sed -n '1,240p' src/App.tsx\" (exit 0)", "command")
 
+    await asyncio.sleep(D * 0.3)
+    await _log("The component and styles are in place. Verifying the file state before moving to persistence.")
+
+    # ---- Phase 3: Wire persistence ----
     plan[1].status = PlanStepStatus.COMPLETED
+    plan[2].status = PlanStepStatus.IN_PROGRESS
+    await _plan(plan, "Component created. Wiring up localStorage persistence.")
+    await asyncio.sleep(D * 0.4)
+
+    await _log("Adding localStorage read on mount and write on toggle. Using a shared THEME_KEY constant to keep it DRY.")
+    await asyncio.sleep(D * 0.4)
+
+    await _log("Running: /bin/zsh -lc 'ls -l src/'", "command")
+    await asyncio.sleep(D * 0.15)
+    await _log("completed: /bin/zsh -lc 'ls -l src/' (exit 0)", "command")
+
+    await asyncio.sleep(D * 0.3)
+    await _log("Updated files: src/App.tsx (added useEffect for localStorage sync)", "file_change")
+
+    await asyncio.sleep(D * 0.4)
+    await _log("Running: /bin/zsh -lc 'git diff -- src/App.tsx'", "command")
+    await asyncio.sleep(D * 0.2)
+    await _log("completed: /bin/zsh -lc 'git diff -- src/App.tsx' (exit 0)", "command")
+
+    await asyncio.sleep(D * 0.3)
+    await _log("Running: /bin/zsh -lc 'git status --short'", "command")
+    await asyncio.sleep(D * 0.15)
+    await _log("completed: /bin/zsh -lc 'git status --short' (exit 0)", "command")
+
+    await asyncio.sleep(D * 0.3)
+    await _log("Persistence layer is wired. The theme key is stored in localStorage and the useEffect hook reads it on mount. Moving to verification.")
+
+    # ---- Phase 4: Verify ----
     plan[2].status = PlanStepStatus.COMPLETED
+    plan[3].status = PlanStepStatus.IN_PROGRESS
+    await _plan(plan, "Persistence wired. Running build and lint verification.")
+    await asyncio.sleep(D * 0.4)
+
+    await _log("Running: /bin/zsh -lc 'npm run build'", "command")
+    await asyncio.sleep(D * 0.6)
+    await _log("completed: /bin/zsh -lc 'npm run build' (exit 0)", "command")
+
+    await asyncio.sleep(D * 0.3)
+    await _log("Running: /bin/zsh -lc 'npm run lint'", "command")
+    await asyncio.sleep(D * 0.4)
+    await _log("completed: /bin/zsh -lc 'npm run lint' (exit 0)", "command")
+
+    await asyncio.sleep(D * 0.3)
+    await _log("Running: /bin/zsh -lc \"nl -ba src/App.tsx | sed -n '1,260p'\"", "command")
+    await asyncio.sleep(D * 0.2)
+    await _log("completed: /bin/zsh -lc \"nl -ba src/App.tsx | sed -n '1,260p'\" (exit 0)", "command")
+
+    await asyncio.sleep(D * 0.3)
+    await _log("Running: /bin/zsh -lc \"nl -ba src/App.css | sed -n '1,260p'\"", "command")
+    await asyncio.sleep(D * 0.2)
+    await _log("completed: /bin/zsh -lc \"nl -ba src/App.css | sed -n '1,260p'\" (exit 0)", "command")
+
+    await asyncio.sleep(D * 0.4)
+    await _log(f"Build and lint both pass. The dark mode toggle is implemented with CSS custom properties, a data-theme attribute on the root element, and localStorage persistence. All acceptance criteria should be met.")
+
+    # ---- Complete ----
+    plan[3].status = PlanStepStatus.COMPLETED
     now = _utc_now_iso()
     duration = _duration_seconds(ticket.build_started_at, now)
     ticket = update_ticket(
@@ -368,14 +547,9 @@ async def _run_mock_build(ticket: Ticket, manager: ConnectionManager) -> Ticket:
         build_duration_seconds=duration,
         current_phase="reviewing",
     )
+    await _plan(plan, "All steps complete. Handing off to review.")
     await manager.send_ticket_event(
-        "agent_plan_updated",
-        ticket.id,
-        {"plan": [step.model_dump() for step in plan], "explanation": "Build complete. Handing off to review."},
-    )
-    await manager.send_ticket_event(
-        "ticket_status_changed",
-        ticket.id,
+        "ticket_status_changed", ticket.id,
         {"status": ticket.status.value, "ticket": ticket.model_dump()},
     )
     return ticket
@@ -383,7 +557,40 @@ async def _run_mock_build(ticket: Ticket, manager: ConnectionManager) -> Ticket:
 
 async def _run_mock_review(ticket: Ticket, manager: ConnectionManager) -> Ticket:
     await manager.send_ticket_event("review_started", ticket.id, {})
-    review_text = "Feature implementation reviewed. No blocking issues found."
+
+    # Simulate review with logs
+    review_log = AgentLog(type="info", message="Started review: current changes")
+    append_log(ticket.id, review_log)
+    await manager.send_ticket_event("agent_log", ticket.id, {"log": review_log.model_dump()})
+    await asyncio.sleep(0.8)
+
+    cmd_log = AgentLog(type="command", message="Running: /bin/zsh -lc \"git status --short && git diff --stat\"")
+    append_log(ticket.id, cmd_log)
+    await manager.send_ticket_event("agent_log", ticket.id, {"log": cmd_log.model_dump()})
+    await asyncio.sleep(0.5)
+
+    cmd_done = AgentLog(type="command", message="completed: /bin/zsh -lc \"git status --short && git diff --stat\" (exit 0)")
+    append_log(ticket.id, cmd_done)
+    await manager.send_ticket_event("agent_log", ticket.id, {"log": cmd_done.model_dump()})
+    await asyncio.sleep(0.4)
+
+    build_log = AgentLog(type="command", message="Running: /bin/zsh -lc 'npm run build'")
+    append_log(ticket.id, build_log)
+    await manager.send_ticket_event("agent_log", ticket.id, {"log": build_log.model_dump()})
+    await asyncio.sleep(0.6)
+
+    build_done = AgentLog(type="command", message="completed: /bin/zsh -lc 'npm run build' (exit 0)")
+    append_log(ticket.id, build_done)
+    await manager.send_ticket_event("agent_log", ticket.id, {"log": build_done.model_dump()})
+    await asyncio.sleep(0.3)
+
+    review_text = (
+        "The implementation adds a clean dark mode toggle using CSS custom properties "
+        "and a data-theme attribute. The toggle component is well-structured with proper "
+        "state management via useState and localStorage persistence via useEffect. "
+        "Build and lint both pass. The CSS variable approach ensures all themed elements "
+        "update consistently. No issues found."
+    )
     review_result = build_review_result(ticket, review_text)
     review_result = await enrich_review_result(ticket, review_result)
     ticket = update_ticket(
@@ -392,8 +599,7 @@ async def _run_mock_review(ticket: Ticket, manager: ConnectionManager) -> Ticket
         current_phase="generating_outputs",
     )
     await manager.send_ticket_event(
-        "review_complete",
-        ticket.id,
+        "review_complete", ticket.id,
         {"review_result": review_result.model_dump(), "ticket": ticket.model_dump()},
     )
     return ticket

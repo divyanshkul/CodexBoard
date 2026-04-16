@@ -28,6 +28,13 @@ manager = ConnectionManager()
 background_tasks: set[asyncio.Task] = set()
 
 
+@app.on_event("startup")
+def _startup_seed():
+    """Seed demo data on startup if SEED_DEMO is set."""
+    from seed_demo import seed_demo_data
+    seed_demo_data()
+
+
 def spawn_task(coro: asyncio.Future | asyncio.Task | asyncio.coroutines) -> None:
     task = asyncio.create_task(coro)
     background_tasks.add(task)

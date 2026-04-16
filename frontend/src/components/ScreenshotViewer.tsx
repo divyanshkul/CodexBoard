@@ -55,18 +55,7 @@ export function ScreenshotViewer({
               />
             </div>
           </div>
-          {diffKeys.includes(key) && (
-            <div>
-              <div className="text-[10px] text-text-muted mb-1 uppercase tracking-wider">
-                Diff heatmap
-              </div>
-              <img
-                src={resolveOutputPath(ticketId, outputs.diff_heatmaps[key]) ?? undefined}
-                alt={`Diff heatmap for ${key}`}
-                className="border border-border-card rounded-md overflow-hidden bg-card-bg aspect-video object-cover w-full"
-              />
-            </div>
-          )}
+          {/* Diff heatmap removed -- doesn't render well */}
         </div>
       ))}
     </div>
