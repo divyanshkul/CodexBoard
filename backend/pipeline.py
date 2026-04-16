@@ -23,7 +23,7 @@ from pathlib import Path
 from codex_client import CodexAppServerClient
 from demo_config import DEMO_PROJECT
 from dev_server import DevServerManager
-from git_utils import create_worktree
+from git_utils import create_worktree, get_workspaces_root, remove_worktree
 from models import (
     AgentLog,
     CriterionResult,
@@ -39,6 +39,7 @@ from outputs.diffgen import generate_diff_heatmaps
 from outputs.markdown import generate_markdown_summary
 from outputs.screenshots import capture_after_screenshots, capture_before_screenshots
 from outputs.video import generate_video
+from review_parser import enrich_review_result
 from state import append_log, update_ticket
 from ws_manager import ConnectionManager
 
@@ -51,6 +52,18 @@ logger = logging.getLogger(__name__)
 
 def mock_codex_enabled() -> bool:
     return os.getenv("MOCK_CODEX", "true").lower() == "true"
+
+
+def codex_model_name() -> str:
+    return os.getenv("CODEX_MODEL", "gpt-5.4")
+
+
+def codex_approval_policy() -> str:
+    return os.getenv("CODEX_APPROVAL_POLICY", "never")
+
+
+def codex_sandbox_policy() -> str:
+    return os.getenv("CODEX_SANDBOX_POLICY", "workspace-write")
 
 
 # ------------------------------------------------------------------
@@ -111,17 +124,51 @@ def build_review_result(ticket: Ticket, raw_review_text: str) -> ReviewResult:
     )
 
 
-def parse_item_to_log(item: dict) -> AgentLog | None:
+def parse_item_to_log(item: dict, event_method: str) -> AgentLog | None:
     item_type = item.get("type", "info")
-    message = item.get("text") or item.get("message") or item.get("summary")
-    if not message:
-        return None
-    mapped_type = {
-        "agentMessage": "agent_message",
-        "command": "command",
-        "fileChange": "file_change",
-    }.get(item_type, "info")
-    return AgentLog(type=mapped_type, message=message)
+    if item_type == "agentMessage":
+        message = item.get("text")
+        return AgentLog(type="agent_message", message=message) if message else None
+
+    if item_type == "commandExecution":
+        command = item.get("command")
+        if not command:
+            return None
+        if event_method == "item/started":
+            return AgentLog(type="command", message=f"Running: {command}")
+        status = item.get("status")
+        exit_code = item.get("exitCode")
+        suffix = f" (exit {exit_code})" if exit_code is not None else ""
+        return AgentLog(type="command", message=f"{status or 'completed'}: {command}{suffix}")
+
+    if item_type == "fileChange":
+        paths = [change.get("path") for change in item.get("changes", []) if change.get("path")]
+        if not paths:
+            return AgentLog(type="file_change", message="Updated files in the worktree.")
+        preview = ", ".join(paths[:3])
+        if len(paths) > 3:
+            preview = f"{preview}, +{len(paths) - 3} more"
+        return AgentLog(type="file_change", message=f"Updated files: {preview}")
+
+    if item_type == "enteredReviewMode":
+        return AgentLog(type="info", message=f"Started review: {item.get('review', 'current changes')}")
+
+    if item_type == "exitedReviewMode":
+        review_text = item.get("review")
+        if not review_text:
+            return None
+        return AgentLog(type="info", message=f"Review finished: {_first_line(review_text)}")
+
+    message = item.get("text") or item.get("message")
+    return AgentLog(type="info", message=message) if message else None
+
+
+def _first_line(text: str) -> str:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped
+    return text.strip()
 
 
 # ------------------------------------------------------------------
@@ -156,24 +203,18 @@ async def run_pipeline(ticket: Ticket, manager: ConnectionManager) -> None:
         # ---- Build ----
         if mock_codex_enabled():
             ticket = await _run_mock_build(ticket, manager)
+            ticket = await _run_mock_review(ticket, manager)
         else:
             ticket = await _run_real_build(ticket, manager)
-
-        # ---- Review ----
-        ticket = update_ticket(ticket.id, current_phase="reviewing")
-        await manager.send_ticket_event("review_started", ticket.id, {})
-        review_text = "Feature implementation reviewed. No blocking issues found."
-        review_result = build_review_result(ticket, review_text)
-        ticket = update_ticket(ticket.id, review_result=review_result, current_phase="generating_outputs")
 
         # ---- Generate outputs (after screenshots, diff, video, markdown) ----
         await _generate_outputs(ticket, manager)
 
-        final_ticket = update_ticket(ticket.id, review_result=review_result, current_phase=None)
+        final_ticket = update_ticket(ticket.id, current_phase=None)
         await manager.send_ticket_event(
-            "review_complete",
+            "ticket_status_changed",
             final_ticket.id,
-            {"review_result": review_result.model_dump(), "ticket": final_ticket.model_dump()},
+            {"status": final_ticket.status.value, "ticket": final_ticket.model_dump()},
         )
     except Exception as exc:
         logger.error("Pipeline failed for ticket %s: %s", ticket.id, exc, exc_info=True)
@@ -231,16 +272,22 @@ async def _try_stop_dev_server() -> None:
 # ------------------------------------------------------------------
 
 async def _prepare_worktree(ticket: Ticket) -> str:
+    intended_path = get_workspaces_root() / ticket.id
+
+    existing_path = ticket.worktree_path or str(intended_path)
+    if Path(existing_path).exists():
+        try:
+            await remove_worktree(ticket.target_repo, existing_path)
+        except Exception:
+            logger.warning("Falling back to direct worktree cleanup for %s", existing_path, exc_info=True)
+            shutil.rmtree(existing_path, ignore_errors=True)
+
     try:
         return await create_worktree(ticket.target_repo, ticket.id)
     except Exception:
-        workspaces_root = Path(
-            os.getenv(
-                "CODEXBOARD_WORKSPACES_ROOT",
-                str(Path(__file__).resolve().parent.parent / "workspaces"),
-            )
-        )
-        worktree_path = workspaces_root / ticket.id
+        if not mock_codex_enabled():
+            raise
+        worktree_path = intended_path
         if worktree_path.exists():
             shutil.rmtree(worktree_path)
         worktree_path.mkdir(parents=True, exist_ok=True)
@@ -316,6 +363,24 @@ async def _run_mock_build(ticket: Ticket, manager: ConnectionManager) -> Ticket:
     return ticket
 
 
+async def _run_mock_review(ticket: Ticket, manager: ConnectionManager) -> Ticket:
+    await manager.send_ticket_event("review_started", ticket.id, {})
+    review_text = "Feature implementation reviewed. No blocking issues found."
+    review_result = build_review_result(ticket, review_text)
+    review_result = await enrich_review_result(ticket, review_result)
+    ticket = update_ticket(
+        ticket.id,
+        review_result=review_result,
+        current_phase="generating_outputs",
+    )
+    await manager.send_ticket_event(
+        "review_complete",
+        ticket.id,
+        {"review_result": review_result.model_dump(), "ticket": ticket.model_dump()},
+    )
+    return ticket
+
+
 # ------------------------------------------------------------------
 # Real build
 # ------------------------------------------------------------------
@@ -324,13 +389,31 @@ async def _run_real_build(ticket: Ticket, manager: ConnectionManager) -> Ticket:
     codex = CodexAppServerClient()
     await codex.start()
     try:
-        thread_id = await codex.thread_start(model="gpt-5.4", cwd=ticket.worktree_path or ticket.target_repo)
+        cwd = ticket.worktree_path or ticket.target_repo
+        thread_id = await codex.thread_start(
+            model=codex_model_name(),
+            cwd=cwd,
+            approval_policy=codex_approval_policy(),
+            sandbox=codex_sandbox_policy(),
+        )
         ticket = update_ticket(ticket.id, codex_thread_id=thread_id)
-        await codex.turn_start(thread_id, build_prompt(ticket))
+        build_turn_id = await codex.turn_start(
+            thread_id,
+            build_prompt(ticket),
+            cwd=cwd,
+            approval_policy=codex_approval_policy(),
+        )
+        review_turn_id: str | None = None
+        review_text: str | None = None
+
         async for notification in codex.read_notifications():
             method = notification.get("method")
             params = notification.get("params", {})
-            if method == "turn/plan/updated":
+            notification_thread_id = params.get("threadId")
+            if notification_thread_id and notification_thread_id != thread_id:
+                continue
+
+            if method == "turn/plan/updated" and params.get("turnId") == build_turn_id:
                 plan = [PlanStep(**entry) for entry in params.get("plan", [])]
                 ticket = update_ticket(ticket.id, agent_plan=plan)
                 await manager.send_ticket_event(
@@ -338,33 +421,91 @@ async def _run_real_build(ticket: Ticket, manager: ConnectionManager) -> Ticket:
                     ticket.id,
                     {"plan": [step.model_dump() for step in plan], "explanation": params.get("explanation")},
                 )
-            elif method == "turn/diff/updated":
+            elif method == "turn/diff/updated" and params.get("turnId") == build_turn_id:
                 diff = params.get("diff", "")
                 ticket = update_ticket(ticket.id, agent_diff=diff)
                 await manager.send_ticket_event("agent_diff_updated", ticket.id, {"diff": diff})
-            elif method == "item/completed":
-                log_entry = parse_item_to_log(params.get("item", {}))
+            elif method in {"item/started", "item/completed"}:
+                item = params.get("item", {})
+                log_entry = parse_item_to_log(item, method)
                 if log_entry is not None:
                     ticket = append_log(ticket.id, log_entry)
                     await manager.send_ticket_event("agent_log", ticket.id, {"log": log_entry.model_dump()})
+
+                if method == "item/completed" and item.get("type") == "exitedReviewMode":
+                    review_text = item.get("review", "").strip() or None
+                    if review_text is None:
+                        continue
+                    review_result = build_review_result(ticket, review_text)
+                    review_result = await enrich_review_result(ticket, review_result)
+                    ticket = update_ticket(
+                        ticket.id,
+                        review_result=review_result,
+                        current_phase="generating_outputs",
+                    )
+                    await manager.send_ticket_event(
+                        "review_complete",
+                        ticket.id,
+                        {"review_result": review_result.model_dump(), "ticket": ticket.model_dump()},
+                    )
             elif method == "turn/completed":
-                now = _utc_now_iso()
-                duration = _duration_seconds(ticket.build_started_at, now)
-                ticket = update_ticket(
-                    ticket.id,
-                    status=TicketStatus.REVIEW,
-                    build_completed_at=now,
-                    build_duration_seconds=duration,
-                )
-                await manager.send_ticket_event(
-                    "ticket_status_changed",
-                    ticket.id,
-                    {"status": ticket.status.value, "ticket": ticket.model_dump()},
-                )
+                turn = params.get("turn", {})
+                turn_id = turn.get("id")
+                status = turn.get("status")
+
+                if turn_id == build_turn_id:
+                    if status != "completed":
+                        error = turn.get("error", {}).get("message") or f"Codex build ended with status {status}."
+                        raise RuntimeError(error)
+
+                    now = _utc_now_iso()
+                    duration = _duration_seconds(ticket.build_started_at, now)
+                    ticket = update_ticket(
+                        ticket.id,
+                        status=TicketStatus.REVIEW,
+                        build_completed_at=now,
+                        build_duration_seconds=duration,
+                        current_phase="reviewing",
+                    )
+                    await manager.send_ticket_event(
+                        "ticket_status_changed",
+                        ticket.id,
+                        {"status": ticket.status.value, "ticket": ticket.model_dump()},
+                    )
+                    await manager.send_ticket_event("review_started", ticket.id, {})
+                    review_turn_id = await codex.review_start(
+                        thread_id,
+                        {"type": "uncommittedChanges"},
+                        delivery="inline",
+                    )
+                    continue
+
+                if review_turn_id is None or turn_id != review_turn_id:
+                    continue
+
+                if status != "completed":
+                    error = turn.get("error", {}).get("message") or f"Codex review ended with status {status}."
+                    raise RuntimeError(error)
+
+                if review_text is None:
+                    review_text = "Review completed, but no review summary was returned."
+                    review_result = build_review_result(ticket, review_text)
+                    review_result = await enrich_review_result(ticket, review_result)
+                    ticket = update_ticket(
+                        ticket.id,
+                        review_result=review_result,
+                        current_phase="generating_outputs",
+                    )
+                    await manager.send_ticket_event(
+                        "review_complete",
+                        ticket.id,
+                        {"review_result": review_result.model_dump(), "ticket": ticket.model_dump()},
+                    )
+
                 return ticket
     finally:
         await codex.stop()
-    raise RuntimeError("Codex build ended without completion event")
+    raise RuntimeError("Codex build ended without a review completion event")
 
 
 # ------------------------------------------------------------------

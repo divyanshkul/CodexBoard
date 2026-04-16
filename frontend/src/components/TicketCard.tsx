@@ -2,7 +2,7 @@
 
 import { Ticket } from "../lib/types";
 import { formatRelativeTime, formatDuration } from "../lib/utils";
-import { Clock, GitBranch, Play, MoreHorizontal, RotateCcw, AlertTriangle, CheckCircle2, Circle } from "lucide-react";
+import { Clock, GitBranch, Play, MoreHorizontal, RotateCcw, AlertTriangle, CheckCircle2, Circle, MessageSquare } from "lucide-react";
 
 function countChangedFiles(diff: string | null): number {
   if (!diff) {
@@ -132,6 +132,21 @@ export function TicketCard({ ticket, onClick, onStartBuild, onDragStart, onDragE
             </span>
           )}
 
+          {/* Retry badge (visible when rebuilding after rejection) */}
+          {ticket.rejection_feedback && ticket.status === "in_progress" && (
+            <span
+              className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-[2px] rounded tracking-wide uppercase"
+              style={{
+                background: "var(--status-failed-bg)",
+                color: "var(--status-failed)",
+              }}
+              title={ticket.rejection_feedback}
+            >
+              <RotateCcw size={8} strokeWidth={2.5} />
+              Retry
+            </span>
+          )}
+
           {ticket.status === "in_progress" && changedFiles > 0 && (
             <span className="text-[10px] font-semibold px-1.5 py-[2px] rounded tracking-wide uppercase bg-[var(--accent-bg)] text-accent">
               {changedFiles} file{changedFiles === 1 ? "" : "s"}
@@ -167,6 +182,18 @@ export function TicketCard({ ticket, onClick, onStartBuild, onDragStart, onDragE
           </span>
         </div>
 
+        {ticket.status === "in_progress" && ticket.rejection_feedback && (
+          <div className="mt-2.5 rounded-md border px-2.5 py-2" style={{ borderColor: "var(--status-failed)", background: "var(--status-failed-bg)" }}>
+            <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: "var(--status-failed)" }}>
+              <MessageSquare size={11} />
+              Rebuilding with feedback
+            </div>
+            <div className="mt-1 text-[11px] text-text-secondary line-clamp-2">
+              {ticket.rejection_feedback}
+            </div>
+          </div>
+        )}
+
         {ticket.status === "in_progress" && activeStep && (
           <div className="mt-2.5 rounded-md bg-[var(--status-in-progress-bg)] px-2 py-1.5 text-[11px] text-[var(--status-in-progress)]">
             Live plan: {activeStep}
@@ -180,7 +207,7 @@ export function TicketCard({ ticket, onClick, onStartBuild, onDragStart, onDragE
               Review ready
             </div>
             <div className="mt-1 text-[11px] text-text-secondary">
-              {passCount}/{totalCriteria} criteria passed
+              {ticket.review_result.summary || `${passCount}/${totalCriteria} criteria passed`}
             </div>
           </div>
         )}

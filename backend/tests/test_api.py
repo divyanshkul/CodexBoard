@@ -60,12 +60,25 @@ async def test_build_ticket(client, sample_ticket):
 
 
 async def test_approve_ticket(client, sample_ticket):
+    import main
     from state import update_ticket
 
-    update_ticket(sample_ticket.id, status=TicketStatus.REVIEW)
+    removed: list[tuple[str, str]] = []
+
+    async def fake_remove_worktree(target_repo: str, worktree_path: str) -> None:
+        removed.append((target_repo, worktree_path))
+
+    main.remove_worktree = fake_remove_worktree  # type: ignore[assignment]
+    update_ticket(
+        sample_ticket.id,
+        status=TicketStatus.REVIEW,
+        worktree_path="/tmp/worktree-path",
+    )
     response = await client.post(f"/api/tickets/{sample_ticket.id}/approve")
     assert response.status_code == 200
     assert response.json()["status"] == "done"
+    assert response.json()["worktree_path"] is None
+    assert removed == [(sample_ticket.target_repo, "/tmp/worktree-path")]
 
 
 async def test_reject_ticket(client, sample_ticket):

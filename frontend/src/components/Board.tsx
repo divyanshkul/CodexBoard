@@ -122,11 +122,27 @@ export function Board() {
     async (ticketId: string, feedback: string) => {
       setActionError(null);
       if (useMock) {
-        dispatch({
-          type: "UPDATE_STATUS",
-          ticket_id: ticketId,
-          status: "failed",
-        });
+        // Build a fully-reset ticket matching real backend behavior
+        const existing = tickets.find((t) => t.id === ticketId);
+        if (existing) {
+          const retryTicket: Ticket = {
+            ...existing,
+            status: "in_progress",
+            rejection_feedback: feedback,
+            build_started_at: new Date().toISOString(),
+            build_completed_at: null,
+            build_duration_seconds: null,
+            agent_plan: null,
+            agent_diff: null,
+            agent_logs: [],
+            review_result: null,
+            last_error: null,
+            current_phase: "building",
+          };
+          dispatch({ type: "UPDATE_TICKET", ticket: retryTicket });
+          // Re-trigger the mock build simulation
+          startBuild(ticketId);
+        }
       } else {
         try {
           const ticket = await api.rejectTicket(ticketId, { feedback });
@@ -136,7 +152,7 @@ export function Board() {
         }
       }
     },
-    [useMock, dispatch]
+    [useMock, tickets, dispatch, startBuild]
   );
 
   const handleMoveTicket = useCallback(

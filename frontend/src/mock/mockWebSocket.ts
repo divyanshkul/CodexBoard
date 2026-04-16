@@ -33,9 +33,9 @@ export class MockWebSocket {
     // t=0s: Status -> in_progress
     schedule(() => {
       send({
-        type: "status_change",
+        type: "ticket_status_changed",
         ticket_id: ticketId,
-        data: { status: "in_progress", phase: "planning" },
+        data: { status: "in_progress" },
       });
     }, 500);
 
@@ -50,7 +50,7 @@ export class MockWebSocket {
 
     schedule(() => {
       send({
-        type: "plan_update",
+        type: "agent_plan_updated",
         ticket_id: ticketId,
         data: { plan: planSteps },
       });
@@ -60,12 +60,12 @@ export class MockWebSocket {
     schedule(() => {
       planSteps[0].status = "inProgress";
       send({
-        type: "plan_update",
+        type: "agent_plan_updated",
         ticket_id: ticketId,
         data: { plan: [...planSteps] },
       });
       send({
-        type: "log",
+        type: "agent_log",
         ticket_id: ticketId,
         data: {
           log: {
@@ -82,12 +82,12 @@ export class MockWebSocket {
       planSteps[0].status = "completed";
       planSteps[1].status = "inProgress";
       send({
-        type: "plan_update",
+        type: "agent_plan_updated",
         ticket_id: ticketId,
         data: { plan: [...planSteps] },
       });
       send({
-        type: "log",
+        type: "agent_log",
         ticket_id: ticketId,
         data: {
           log: {
@@ -104,12 +104,12 @@ export class MockWebSocket {
       planSteps[1].status = "completed";
       planSteps[2].status = "inProgress";
       send({
-        type: "plan_update",
+        type: "agent_plan_updated",
         ticket_id: ticketId,
         data: { plan: [...planSteps] },
       });
       send({
-        type: "log",
+        type: "agent_log",
         ticket_id: ticketId,
         data: {
           log: {
@@ -120,7 +120,7 @@ export class MockWebSocket {
         },
       });
       send({
-        type: "diff_update",
+        type: "agent_diff_updated",
         ticket_id: ticketId,
         data: {
           diff: `diff --git a/src/components/feature/index.tsx b/src/components/feature/index.tsx
@@ -152,12 +152,12 @@ new file mode 100644
       planSteps[3].status = "completed";
       planSteps[4].status = "inProgress";
       send({
-        type: "plan_update",
+        type: "agent_plan_updated",
         ticket_id: ticketId,
         data: { plan: [...planSteps] },
       });
       send({
-        type: "log",
+        type: "agent_log",
         ticket_id: ticketId,
         data: {
           log: {
@@ -173,17 +173,22 @@ new file mode 100644
     schedule(() => {
       planSteps[4].status = "completed";
       send({
-        type: "plan_update",
+        type: "agent_plan_updated",
         ticket_id: ticketId,
         data: { plan: [...planSteps] },
       });
       send({
-        type: "status_change",
+        type: "ticket_status_changed",
         ticket_id: ticketId,
-        data: { status: "review", phase: "review" },
+        data: { status: "review" },
       });
       send({
-        type: "log",
+        type: "review_started",
+        ticket_id: ticketId,
+        data: {},
+      });
+      send({
+        type: "agent_log",
         ticket_id: ticketId,
         data: {
           log: {
@@ -221,22 +226,28 @@ new file mode 100644
         risk_level: "low",
       };
       send({
-        type: "review_update",
+        type: "review_complete",
         ticket_id: ticketId,
-        data: { review },
+        data: { review_result: review },
       });
     }, 22000);
 
     // t=25s: Outputs
     schedule(() => {
       send({
-        type: "outputs_update",
+        type: "output_ready",
         ticket_id: ticketId,
         data: {
-          outputs: {
-            after_screenshots: { main: `/outputs/${ticketId}/after/main.png` },
-            markdown_path: `/outputs/${ticketId}/summary.md`,
-          },
+          output_type: "after_screenshots",
+          outputs: { main: `/outputs/${ticketId}/after/main.png` },
+        },
+      });
+      send({
+        type: "output_ready",
+        ticket_id: ticketId,
+        data: {
+          output_type: "markdown",
+          outputs: { markdown_path: `/outputs/${ticketId}/summary.md` },
         },
       });
       this.running = false;

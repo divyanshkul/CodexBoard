@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
+from git_utils import remove_worktree
 from models import CreateTicketRequest, RejectTicketRequest, Ticket, TicketStatus, utc_now_iso
 from outputs import get_outputs_root
 from pipeline import run_pipeline
@@ -90,7 +91,19 @@ async def approve_ticket(ticket_id: str) -> Ticket:
     if ticket.status != TicketStatus.REVIEW:
         raise HTTPException(status_code=400, detail="Only review tickets can be approved")
 
-    updated = update_ticket(ticket_id, status=TicketStatus.DONE, current_phase=None, last_error=None)
+    if ticket.worktree_path:
+        try:
+            await remove_worktree(ticket.target_repo, ticket.worktree_path)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Failed to clean up worktree: {exc}") from exc
+
+    updated = update_ticket(
+        ticket_id,
+        status=TicketStatus.DONE,
+        current_phase=None,
+        last_error=None,
+        worktree_path=None,
+    )
     await manager.send_ticket_event(
         "ticket_status_changed",
         ticket_id,

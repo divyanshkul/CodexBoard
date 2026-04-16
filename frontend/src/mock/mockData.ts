@@ -69,7 +69,7 @@ export const mockTickets: Ticket[] = [
     build_started_at: hourAgo,
     build_completed_at: null,
     build_duration_seconds: null,
-    rejection_feedback: null,
+    rejection_feedback: "The reset token should use crypto.randomUUID() instead of randomBytes for better entropy. Also the email template is missing the company logo.",
     agent_plan: [
       { step: "Analyze existing auth module structure", status: "completed" },
       { step: "Create password reset request endpoint", status: "completed" },

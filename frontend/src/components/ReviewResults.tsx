@@ -15,6 +15,12 @@ export function ReviewResults({ review }: { review: ReviewResult | null }) {
   const passCount = review.criteria_results.filter(
     (c) => c.status === "pass"
   ).length;
+  const failCount = review.criteria_results.filter(
+    (c) => c.status === "fail"
+  ).length;
+  const unknownCount = review.criteria_results.filter(
+    (c) => c.status === "unknown"
+  ).length;
   const total = review.criteria_results.length;
 
   return (
@@ -32,7 +38,9 @@ export function ReviewResults({ review }: { review: ReviewResult | null }) {
             }}
           />
           <span className="text-[13px] font-medium text-text-primary">
-            {passCount}/{total} criteria passed
+            {passCount > 0 || failCount > 0
+              ? `${passCount}/${total} criteria passed`
+              : `${unknownCount}/${total} criteria pending verification`}
           </span>
         </div>
         <span className="text-[11px] text-text-muted">|</span>
@@ -109,6 +117,17 @@ export function ReviewResults({ review }: { review: ReviewResult | null }) {
           {review.summary}
         </p>
       </div>
+
+      {review.raw_review_text && (
+        <div className="p-3 rounded-md border border-border-divider">
+          <div className="text-[11px] font-semibold text-text-muted uppercase tracking-[0.06em] mb-2">
+            Raw review
+          </div>
+          <pre className="whitespace-pre-wrap text-[12px] leading-relaxed text-text-secondary font-mono">
+            {review.raw_review_text}
+          </pre>
+        </div>
+      )}
     </div>
   );
 }
