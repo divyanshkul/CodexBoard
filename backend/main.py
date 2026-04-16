@@ -70,6 +70,7 @@ async def start_build(ticket_id: str) -> Ticket:
         agent_diff=None,
         agent_logs=[],
         review_result=None,
+        last_error=None,
         current_phase="building",
     )
     await manager.send_ticket_event(
@@ -89,7 +90,7 @@ async def approve_ticket(ticket_id: str) -> Ticket:
     if ticket.status != TicketStatus.REVIEW:
         raise HTTPException(status_code=400, detail="Only review tickets can be approved")
 
-    updated = update_ticket(ticket_id, status=TicketStatus.DONE, current_phase=None)
+    updated = update_ticket(ticket_id, status=TicketStatus.DONE, current_phase=None, last_error=None)
     await manager.send_ticket_event(
         "ticket_status_changed",
         ticket_id,
@@ -117,6 +118,7 @@ async def reject_ticket(ticket_id: str, request: RejectTicketRequest) -> Ticket:
         agent_diff=None,
         agent_logs=[],
         review_result=None,
+        last_error=None,
         current_phase="building",
     )
     await manager.send_ticket_event(

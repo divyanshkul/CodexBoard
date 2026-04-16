@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
 :root {
+  --font-geist-sans: "Inter", "Segoe UI", sans-serif;
+  --font-geist-mono: "SFMono-Regular", "Menlo", "Monaco", monospace;
   --page-bg: #F7F8FA;
   --card-bg: #FFFFFF;
   --card-hover: #FCFCFD;

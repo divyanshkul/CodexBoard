@@ -91,6 +91,7 @@ class Ticket(BaseModel):
     build_completed_at: Optional[str] = None
     build_duration_seconds: Optional[float] = None
     rejection_feedback: Optional[str] = None
+    last_error: Optional[str] = None
     agent_plan: Optional[list[PlanStep]] = None
     agent_diff: Optional[str] = None
     agent_logs: list[AgentLog] = Field(default_factory=list)

@@ -215,6 +215,26 @@ export function TicketDetailModal({
                 </div>
               )}
 
+              {ticket.last_error && ticket.status === "failed" && (
+                <div
+                  className="p-3.5 rounded-lg border"
+                  style={{
+                    borderColor: "var(--status-failed)",
+                    background: "var(--status-failed-bg)",
+                  }}
+                >
+                  <h3
+                    className="text-[11px] font-semibold uppercase tracking-[0.06em] mb-1"
+                    style={{ color: "var(--status-failed)" }}
+                  >
+                    Last error
+                  </h3>
+                  <p className="text-[13px] text-text-secondary leading-[1.5]">
+                    {ticket.last_error}
+                  </p>
+                </div>
+              )}
+
               {(ticket.codex_thread_id || ticket.current_phase) && (
                 <div className="grid grid-cols-2 gap-3">
                   {ticket.codex_thread_id && (
@@ -256,12 +276,12 @@ export function TicketDetailModal({
           {activeTab === "logs" && <AgentLogFeed logs={ticket.agent_logs} />}
           {activeTab === "outputs" && (
             <div className="space-y-6">
-              <ScreenshotViewer outputs={ticket.outputs} />
+              <ScreenshotViewer ticketId={ticket.id} outputs={ticket.outputs} />
               {ticket.outputs.video_path && (
-                <VideoPlayer videoPath={ticket.outputs.video_path} />
+                <VideoPlayer ticketId={ticket.id} videoPath={ticket.outputs.video_path} />
               )}
               {ticket.outputs.markdown_path && (
-                <MarkdownViewer path={ticket.outputs.markdown_path} />
+                <MarkdownViewer ticketId={ticket.id} path={ticket.outputs.markdown_path} />
               )}
             </div>
           )}

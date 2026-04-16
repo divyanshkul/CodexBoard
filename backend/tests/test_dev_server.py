@@ -35,7 +35,7 @@ async def test_dev_server_start_and_stop(monkeypatch: pytest.MonkeyPatch, tmp_pa
         return None
 
     monkeypatch.setattr(dev_server.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
-    monkeypatch.setattr(DevServerManager, "wait_until_ready", fake_wait_until_ready)
+    monkeypatch.setattr(DevServerManager, "_wait_until_ready", fake_wait_until_ready)
 
     manager = DevServerManager()
     await manager.start(str(tmp_path), "python -m http.server 8000", 8000, timeout=10)

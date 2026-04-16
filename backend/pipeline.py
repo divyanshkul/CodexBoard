@@ -1,12 +1,28 @@
+"""Build + Review + Output pipeline orchestrator.
+
+Manages the full lifecycle of a ticket:
+    1. Create git worktree
+    2. (Optional) Start dev server on original repo → capture *before* screenshots
+    3. Run Codex build (real or mock)
+    4. Review
+    5. (Optional) Start dev server on worktree → capture *after* screenshots,
+       record video walkthrough with TTS narration
+    6. Generate pixel-diff heatmaps
+    7. Generate markdown summary
+    8. Broadcast ``output_ready`` WebSocket events for each output type
+"""
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
 from codex_client import CodexAppServerClient
+from demo_config import DEMO_PROJECT
+from dev_server import DevServerManager
 from git_utils import create_worktree
 from models import (
     AgentLog,
@@ -26,10 +42,20 @@ from outputs.video import generate_video
 from state import append_log, update_ticket
 from ws_manager import ConnectionManager
 
+logger = logging.getLogger(__name__)
+
+
+# ------------------------------------------------------------------
+# Config helpers
+# ------------------------------------------------------------------
 
 def mock_codex_enabled() -> bool:
     return os.getenv("MOCK_CODEX", "true").lower() == "true"
 
+
+# ------------------------------------------------------------------
+# Prompt / review helpers
+# ------------------------------------------------------------------
 
 def build_prompt(ticket: Ticket) -> str:
     lines = [
@@ -98,17 +124,27 @@ def parse_item_to_log(item: dict) -> AgentLog | None:
     return AgentLog(type=mapped_type, message=message)
 
 
+# ------------------------------------------------------------------
+# Main pipeline
+# ------------------------------------------------------------------
+
 async def run_pipeline(ticket: Ticket, manager: ConnectionManager) -> None:
     try:
         worktree_path = await _prepare_worktree(ticket)
         ticket = update_ticket(
             ticket.id,
             worktree_path=worktree_path,
+            last_error=None,
             current_phase="building",
         )
 
+        # ---- Before screenshots (start dev server on original repo) ----
         if ticket.output_preferences.screenshots:
-            before = await capture_before_screenshots(ticket)
+            before_url = await _try_start_dev_server(
+                ticket.target_repo, DEMO_PROJECT["base_port"]
+            )
+            before = await capture_before_screenshots(ticket, server_url=before_url)
+            await _try_stop_dev_server()
             outputs = ticket.outputs.model_copy(update={"before_screenshots": before})
             ticket = update_ticket(ticket.id, outputs=outputs)
             await manager.send_ticket_event(
@@ -117,17 +153,20 @@ async def run_pipeline(ticket: Ticket, manager: ConnectionManager) -> None:
                 {"output_type": "before_screenshots", "outputs": before},
             )
 
+        # ---- Build ----
         if mock_codex_enabled():
             ticket = await _run_mock_build(ticket, manager)
         else:
             ticket = await _run_real_build(ticket, manager)
 
+        # ---- Review ----
         ticket = update_ticket(ticket.id, current_phase="reviewing")
         await manager.send_ticket_event("review_started", ticket.id, {})
         review_text = "Feature implementation reviewed. No blocking issues found."
         review_result = build_review_result(ticket, review_text)
         ticket = update_ticket(ticket.id, review_result=review_result, current_phase="generating_outputs")
 
+        # ---- Generate outputs (after screenshots, diff, video, markdown) ----
         await _generate_outputs(ticket, manager)
 
         final_ticket = update_ticket(ticket.id, review_result=review_result, current_phase=None)
@@ -137,9 +176,11 @@ async def run_pipeline(ticket: Ticket, manager: ConnectionManager) -> None:
             {"review_result": review_result.model_dump(), "ticket": final_ticket.model_dump()},
         )
     except Exception as exc:
+        logger.error("Pipeline failed for ticket %s: %s", ticket.id, exc, exc_info=True)
         failed = update_ticket(
             ticket.id,
             status=TicketStatus.FAILED,
+            last_error=str(exc),
             current_phase=None,
             build_completed_at=_utc_now_iso(),
         )
@@ -150,17 +191,65 @@ async def run_pipeline(ticket: Ticket, manager: ConnectionManager) -> None:
         )
 
 
+# ------------------------------------------------------------------
+# Dev-server helpers (module-level singleton for before/after)
+# ------------------------------------------------------------------
+
+_active_server: DevServerManager | None = None
+
+
+async def _try_start_dev_server(cwd: str, port: int) -> str | None:
+    """Best-effort start a dev server.  Returns the URL or None."""
+    global _active_server
+    try:
+        _active_server = DevServerManager()
+        await _active_server.start(
+            cwd=cwd,
+            command=DEMO_PROJECT["dev_server_command"],
+            port=port,
+            timeout=DEMO_PROJECT.get("startup_timeout", 30),
+        )
+        return _active_server.url
+    except Exception:
+        logger.warning("Could not start dev server on port %d", port, exc_info=True)
+        _active_server = None
+        return None
+
+
+async def _try_stop_dev_server() -> None:
+    global _active_server
+    if _active_server is not None:
+        try:
+            await _active_server.stop()
+        except Exception:
+            logger.warning("Error stopping dev server", exc_info=True)
+        _active_server = None
+
+
+# ------------------------------------------------------------------
+# Worktree
+# ------------------------------------------------------------------
+
 async def _prepare_worktree(ticket: Ticket) -> str:
     try:
         return await create_worktree(ticket.target_repo, ticket.id)
     except Exception:
-        workspaces_root = Path(os.getenv("CODEXBOARD_WORKSPACES_ROOT", str(Path(__file__).resolve().parent.parent / "workspaces")))
+        workspaces_root = Path(
+            os.getenv(
+                "CODEXBOARD_WORKSPACES_ROOT",
+                str(Path(__file__).resolve().parent.parent / "workspaces"),
+            )
+        )
         worktree_path = workspaces_root / ticket.id
         if worktree_path.exists():
             shutil.rmtree(worktree_path)
         worktree_path.mkdir(parents=True, exist_ok=True)
         return str(worktree_path)
 
+
+# ------------------------------------------------------------------
+# Mock build
+# ------------------------------------------------------------------
 
 async def _run_mock_build(ticket: Ticket, manager: ConnectionManager) -> Ticket:
     plan = [
@@ -227,6 +316,10 @@ async def _run_mock_build(ticket: Ticket, manager: ConnectionManager) -> Ticket:
     return ticket
 
 
+# ------------------------------------------------------------------
+# Real build
+# ------------------------------------------------------------------
+
 async def _run_real_build(ticket: Ticket, manager: ConnectionManager) -> Ticket:
     codex = CodexAppServerClient()
     await codex.start()
@@ -274,44 +367,78 @@ async def _run_real_build(ticket: Ticket, manager: ConnectionManager) -> Ticket:
     raise RuntimeError("Codex build ended without completion event")
 
 
+# ------------------------------------------------------------------
+# Output generation
+# ------------------------------------------------------------------
+
 async def _generate_outputs(ticket: Ticket, manager: ConnectionManager) -> None:
+    """Generate all requested outputs (after screenshots, diff, video, markdown).
+
+    Starts a dev server on the worktree for after-screenshots and video,
+    then shuts it down before generating the remaining outputs (diff,
+    markdown) which don't need a running server.
+    """
     current_ticket = ticket
-    if ticket.output_preferences.screenshots:
-        after = await capture_after_screenshots(ticket)
-        outputs = current_ticket.outputs.model_copy(update={"after_screenshots": after})
-        current_ticket = update_ticket(ticket.id, outputs=outputs)
-        await manager.send_ticket_event(
-            "output_ready",
-            ticket.id,
-            {"output_type": "after_screenshots", "outputs": after},
+    after_server_url: str | None = None
+
+    # Start dev server on worktree for after-capture and video
+    needs_server = (
+        ticket.output_preferences.screenshots or ticket.output_preferences.video
+    )
+    if needs_server:
+        cwd = ticket.worktree_path or ticket.target_repo
+        after_server_url = await _try_start_dev_server(
+            cwd, DEMO_PROJECT["worktree_port"]
         )
 
-        if ticket.output_preferences.pixel_diff:
-            heatmaps = await generate_diff_heatmaps(
-                ticket.id,
-                current_ticket.outputs.before_screenshots,
-                after,
-            )
-            outputs = current_ticket.outputs.model_copy(update={"diff_heatmaps": heatmaps})
+    try:
+        # -- After screenshots --
+        if ticket.output_preferences.screenshots:
+            after = await capture_after_screenshots(ticket, server_url=after_server_url)
+            outputs = current_ticket.outputs.model_copy(update={"after_screenshots": after})
             current_ticket = update_ticket(ticket.id, outputs=outputs)
             await manager.send_ticket_event(
                 "output_ready",
                 ticket.id,
-                {"output_type": "diff_heatmaps", "outputs": heatmaps},
+                {"output_type": "after_screenshots", "outputs": after},
             )
 
-    if ticket.output_preferences.video:
-        video_path = await generate_video(ticket.id, ticket.title)
-        outputs = current_ticket.outputs.model_copy(update={"video_path": video_path})
-        current_ticket = update_ticket(ticket.id, outputs=outputs)
-        await manager.send_ticket_event(
-            "output_ready",
-            ticket.id,
-            {"output_type": "video", "outputs": {"video_path": video_path}},
-        )
+            # -- Pixel-diff heatmaps --
+            if ticket.output_preferences.pixel_diff:
+                heatmaps = await generate_diff_heatmaps(
+                    ticket.id,
+                    current_ticket.outputs.before_screenshots,
+                    after,
+                )
+                outputs = current_ticket.outputs.model_copy(update={"diff_heatmaps": heatmaps})
+                current_ticket = update_ticket(ticket.id, outputs=outputs)
+                await manager.send_ticket_event(
+                    "output_ready",
+                    ticket.id,
+                    {"output_type": "diff_heatmaps", "outputs": heatmaps},
+                )
 
+        # -- Video walkthrough (with narration) --
+        if ticket.output_preferences.video:
+            video_path = await generate_video(
+                current_ticket, server_url=after_server_url
+            )
+            outputs = current_ticket.outputs.model_copy(update={"video_path": video_path})
+            current_ticket = update_ticket(ticket.id, outputs=outputs)
+            await manager.send_ticket_event(
+                "output_ready",
+                ticket.id,
+                {"output_type": "video", "outputs": {"video_path": video_path}},
+            )
+    finally:
+        # Always stop the server
+        await _try_stop_dev_server()
+
+    # -- Markdown summary (no server needed) --
     if ticket.output_preferences.markdown and current_ticket.review_result is not None:
-        markdown_path = await generate_markdown_summary(ticket, current_ticket.review_result)
+        markdown_path = await generate_markdown_summary(
+            current_ticket, current_ticket.review_result
+        )
         outputs = current_ticket.outputs.model_copy(update={"markdown_path": markdown_path})
         update_ticket(ticket.id, outputs=outputs)
         await manager.send_ticket_event(
@@ -320,6 +447,10 @@ async def _generate_outputs(ticket: Ticket, manager: ConnectionManager) -> None:
             {"output_type": "markdown", "outputs": {"markdown_path": markdown_path}},
         )
 
+
+# ------------------------------------------------------------------
+# Utilities
+# ------------------------------------------------------------------
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")

@@ -2,3 +2,28 @@ docs/*
 .agents/*
 .claude/*
 skills-lock.json
+
+# secrets
+.env
+.env.local
+.env.*
+backend/.env
+
+# python related
+*.pyc
+__pycache__/
+venv/
+env/
+.venv/
+backend/.venv/
+# node related
+node_modules/
+dist/
+build/
+.next/
+
+# outputs (generated at runtime)
+outputs/
+workspaces/
+
+backend/.tmp/*

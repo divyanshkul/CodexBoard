@@ -37,3 +37,19 @@ export const api = {
       body: JSON.stringify(data),
     }),
 };
+
+export function resolveOutputPath(ticketId: string, path: string | null | undefined): string | null {
+  if (!path) {
+    return null;
+  }
+
+  if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("/outputs/")) {
+    return path;
+  }
+
+  if (path.startsWith("outputs/")) {
+    return `/${path}`;
+  }
+
+  return `/outputs/${ticketId}/${path.replace(/^\/+/, "")}`;
+}

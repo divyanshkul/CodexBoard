@@ -15,10 +15,14 @@ import {
   Loader2,
   Filter,
   SlidersHorizontal,
+  AlertCircle,
 } from "lucide-react";
 
+const useMockData =
+  import.meta.env.VITE_USE_MOCKS === "true";
+
 export function Board() {
-  const useMock = true;
+  const useMock = useMockData;
   const { tickets, dispatch, loading, error, getByStatus } =
     useTickets(useMock);
   const { startBuild } = useWebSocket(dispatch, useMock);
@@ -26,6 +30,7 @@ export function Board() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [draggingTicketId, setDraggingTicketId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const currentSelected = selectedTicket
     ? tickets.find((t) => t.id === selectedTicket.id) || null
@@ -33,6 +38,7 @@ export function Board() {
 
   const handleCreate = useCallback(
     async (data: CreateTicketRequest) => {
+      setActionError(null);
       if (useMock) {
         const newTicket: Ticket = {
           id: `TKT-${String(tickets.length + 1).padStart(3, "0")}`,
@@ -43,6 +49,7 @@ export function Board() {
           build_completed_at: null,
           build_duration_seconds: null,
           rejection_feedback: null,
+          last_error: null,
           agent_plan: null,
           agent_diff: null,
           agent_logs: [],
@@ -60,8 +67,13 @@ export function Board() {
         };
         dispatch({ type: "ADD_TICKET", ticket: newTicket });
       } else {
-        const ticket = await api.createTicket(data);
-        dispatch({ type: "ADD_TICKET", ticket });
+        try {
+          const ticket = await api.createTicket(data);
+          dispatch({ type: "ADD_TICKET", ticket });
+        } catch (err) {
+          setActionError(err instanceof Error ? err.message : "Failed to create ticket.");
+          return;
+        }
       }
       setShowCreateModal(false);
     },
@@ -69,17 +81,25 @@ export function Board() {
   );
 
   const handleStartBuild = useCallback(
-    (ticketId: string) => {
+    async (ticketId: string) => {
+      setActionError(null);
       startBuild(ticketId);
-      if (!useMock) {
-        api.startBuild(ticketId);
+      if (useMock) {
+        return;
+      }
+      try {
+        const ticket = await api.startBuild(ticketId);
+        dispatch({ type: "UPDATE_TICKET", ticket });
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : "Failed to start build.");
       }
     },
-    [startBuild, useMock]
+    [dispatch, startBuild, useMock]
   );
 
   const handleApprove = useCallback(
     async (ticketId: string) => {
+      setActionError(null);
       if (useMock) {
         dispatch({
           type: "UPDATE_STATUS",
@@ -87,8 +107,12 @@ export function Board() {
           status: "done",
         });
       } else {
-        const ticket = await api.approveTicket(ticketId);
-        dispatch({ type: "UPDATE_TICKET", ticket });
+        try {
+          const ticket = await api.approveTicket(ticketId);
+          dispatch({ type: "UPDATE_TICKET", ticket });
+        } catch (err) {
+          setActionError(err instanceof Error ? err.message : "Failed to approve ticket.");
+        }
       }
     },
     [useMock, dispatch]
@@ -96,6 +120,7 @@ export function Board() {
 
   const handleReject = useCallback(
     async (ticketId: string, feedback: string) => {
+      setActionError(null);
       if (useMock) {
         dispatch({
           type: "UPDATE_STATUS",
@@ -103,8 +128,12 @@ export function Board() {
           status: "failed",
         });
       } else {
-        const ticket = await api.rejectTicket(ticketId, { feedback });
-        dispatch({ type: "UPDATE_TICKET", ticket });
+        try {
+          const ticket = await api.rejectTicket(ticketId, { feedback });
+          dispatch({ type: "UPDATE_TICKET", ticket });
+        } catch (err) {
+          setActionError(err instanceof Error ? err.message : "Failed to reject ticket.");
+        }
       }
     },
     [useMock, dispatch]
@@ -112,6 +141,10 @@ export function Board() {
 
   const handleMoveTicket = useCallback(
     (ticketId: string, newStatus: TicketStatus) => {
+      if (!useMock) {
+        setDraggingTicketId(null);
+        return;
+      }
       const ticket = tickets.find((t) => t.id === ticketId);
       if (!ticket || ticket.status === newStatus) return;
       dispatch({
@@ -212,6 +245,13 @@ export function Board() {
         </div>
       </header>
 
+      {actionError && (
+        <div className="px-4 py-2 border-b border-border-divider bg-[var(--status-failed-bg)] text-[12px] text-[var(--status-failed)] flex items-center gap-2">
+          <AlertCircle size={14} />
+          {actionError}
+        </div>
+      )}
+
       {/* Board columns — full width, evenly distributed */}
       <div className="flex-1 flex overflow-hidden">
         {COLUMN_ORDER.map((status, i) => (
@@ -257,6 +297,7 @@ export function Board() {
               status="failed"
               tickets={getByStatus("failed")}
               onTicketClick={setSelectedTicket}
+              onStartBuild={handleStartBuild}
               onDropTicket={handleMoveTicket}
               draggingTicketId={draggingTicketId}
               onDragStart={setDraggingTicketId}

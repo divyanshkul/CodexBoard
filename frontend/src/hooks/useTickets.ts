@@ -5,7 +5,7 @@ import { Ticket, TicketAction, TicketStatus } from "../lib/types";
 import { api } from "../lib/api";
 import { mockTickets } from "../mock/mockData";
 
-function ticketReducer(state: Ticket[], action: TicketAction): Ticket[] {
+export function ticketReducer(state: Ticket[], action: TicketAction): Ticket[] {
   switch (action.type) {
     case "SET_TICKETS":
       return action.tickets;
@@ -19,6 +19,11 @@ function ticketReducer(state: Ticket[], action: TicketAction): Ticket[] {
     case "UPDATE_STATUS":
       return state.map((t) =>
         t.id === action.ticket_id ? { ...t, status: action.status } : t
+      );
+
+    case "UPDATE_PHASE":
+      return state.map((t) =>
+        t.id === action.ticket_id ? { ...t, current_phase: action.phase } : t
       );
 
     case "UPDATE_PLAN":
@@ -50,17 +55,23 @@ function ticketReducer(state: Ticket[], action: TicketAction): Ticket[] {
           : t
       );
 
+    case "SET_ERROR":
+      return state.map((t) =>
+        t.id === action.ticket_id ? { ...t, last_error: action.error } : t
+      );
+
     default:
       return state;
   }
 }
 
-export function useTickets(useMock = true) {
+export function useTickets(useMock = false) {
   const [tickets, dispatch] = useReducer(ticketReducer, []);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setError(null);
     if (useMock) {
       dispatch({ type: "SET_TICKETS", tickets: mockTickets });
       setLoading(false);

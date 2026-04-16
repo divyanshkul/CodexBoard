@@ -1,9 +1,16 @@
 "use client";
 
+import { resolveOutputPath } from "../lib/api";
 import { TicketOutputs } from "../lib/types";
 import { Image } from "lucide-react";
 
-export function ScreenshotViewer({ outputs }: { outputs: TicketOutputs }) {
+export function ScreenshotViewer({
+  ticketId,
+  outputs,
+}: {
+  ticketId: string;
+  outputs: TicketOutputs;
+}) {
   const beforeKeys = Object.keys(outputs.before_screenshots);
   const afterKeys = Object.keys(outputs.after_screenshots);
   const diffKeys = Object.keys(outputs.diff_heatmaps);
@@ -30,20 +37,22 @@ export function ScreenshotViewer({ outputs }: { outputs: TicketOutputs }) {
                 <div className="text-[10px] text-text-muted mb-1 uppercase tracking-wider">
                   Before
                 </div>
-                <div className="border border-border-card rounded-md overflow-hidden bg-card-bg aspect-video flex items-center justify-center text-[11px] text-text-muted">
-                  <Image size={16} className="mr-1" />
-                  {key}
-                </div>
+                <img
+                  src={resolveOutputPath(ticketId, outputs.before_screenshots[key]) ?? undefined}
+                  alt={`Before screenshot for ${key}`}
+                  className="border border-border-card rounded-md overflow-hidden bg-card-bg aspect-video object-cover w-full"
+                />
               </div>
             )}
             <div>
               <div className="text-[10px] text-text-muted mb-1 uppercase tracking-wider">
                 After
               </div>
-              <div className="border border-border-card rounded-md overflow-hidden bg-card-bg aspect-video flex items-center justify-center text-[11px] text-text-muted">
-                <Image size={16} className="mr-1" />
-                {key}
-              </div>
+              <img
+                src={resolveOutputPath(ticketId, outputs.after_screenshots[key]) ?? undefined}
+                alt={`After screenshot for ${key}`}
+                className="border border-border-card rounded-md overflow-hidden bg-card-bg aspect-video object-cover w-full"
+              />
             </div>
           </div>
           {diffKeys.includes(key) && (
@@ -51,10 +60,11 @@ export function ScreenshotViewer({ outputs }: { outputs: TicketOutputs }) {
               <div className="text-[10px] text-text-muted mb-1 uppercase tracking-wider">
                 Diff heatmap
               </div>
-              <div className="border border-border-card rounded-md overflow-hidden bg-card-bg aspect-video flex items-center justify-center text-[11px] text-text-muted">
-                <Image size={16} className="mr-1" />
-                diff: {key}
-              </div>
+              <img
+                src={resolveOutputPath(ticketId, outputs.diff_heatmaps[key]) ?? undefined}
+                alt={`Diff heatmap for ${key}`}
+                className="border border-border-card rounded-md overflow-hidden bg-card-bg aspect-video object-cover w-full"
+              />
             </div>
           )}
         </div>

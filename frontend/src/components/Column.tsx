@@ -109,7 +109,7 @@ export function Column({
               ticket={ticket}
               onClick={() => onTicketClick(ticket)}
               onStartBuild={
-                status === "todo" && onStartBuild
+                (status === "todo" || status === "failed") && onStartBuild
                   ? () => onStartBuild(ticket.id)
                   : undefined
               }

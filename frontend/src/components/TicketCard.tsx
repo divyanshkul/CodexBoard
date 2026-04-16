@@ -1,9 +1,15 @@
 "use client";
 
 import { Ticket } from "../lib/types";
-import { StatusIcon } from "./StatusIcon";
 import { formatRelativeTime, formatDuration } from "../lib/utils";
-import { Clock, GitBranch, Play, MoreHorizontal } from "lucide-react";
+import { Clock, GitBranch, Play, MoreHorizontal, RotateCcw, AlertTriangle, CheckCircle2, Circle } from "lucide-react";
+
+function countChangedFiles(diff: string | null): number {
+  if (!diff) {
+    return 0;
+  }
+  return diff.split("\n").filter((line) => line.startsWith("diff --git ")).length;
+}
 
 interface TicketCardProps {
   ticket: Ticket;
@@ -27,6 +33,11 @@ export function TicketCard({ ticket, onClick, onStartBuild, onDragStart, onDragE
             : undefined;
 
   const showLeftBorder = ticket.status !== "todo";
+  const changedFiles = countChangedFiles(ticket.agent_diff);
+  const activeStep = ticket.agent_plan?.find((step) => step.status === "inProgress")?.step;
+  const passCount = ticket.review_result?.criteria_results.filter((criterion) => criterion.status === "pass").length ?? 0;
+  const totalCriteria = ticket.review_result?.criteria_results.length ?? 0;
+  const repoLabel = ticket.target_repo.split("/").filter(Boolean).pop() ?? ticket.target_repo;
 
   // Compute plan progress for in_progress tickets
   const planProgress =
@@ -38,7 +49,7 @@ export function TicketCard({ ticket, onClick, onStartBuild, onDragStart, onDragE
   return (
     <div
       onClick={onClick}
-      draggable
+      draggable={Boolean(onDragStart)}
       onDragStart={(e) => {
         e.dataTransfer.effectAllowed = "move";
         e.dataTransfer.setData("text/plain", ticket.id);
@@ -62,16 +73,20 @@ export function TicketCard({ ticket, onClick, onStartBuild, onDragStart, onDragE
             {ticket.id}
           </span>
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-100">
-            {ticket.status === "todo" && onStartBuild && (
+            {(ticket.status === "todo" || ticket.status === "failed") && onStartBuild && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onStartBuild();
                 }}
                 className="p-1 rounded-md hover:bg-[var(--accent-bg)] text-text-muted hover:text-accent transition-all duration-100"
-                title="Start build"
+                title={ticket.status === "failed" ? "Retry build" : "Start build"}
               >
-                <Play size={12} fill="currentColor" />
+                {ticket.status === "failed" ? (
+                  <RotateCcw size={12} />
+                ) : (
+                  <Play size={12} fill="currentColor" />
+                )}
               </button>
             )}
             <button
@@ -93,7 +108,7 @@ export function TicketCard({ ticket, onClick, onStartBuild, onDragStart, onDragE
           {/* Target repo */}
           <span className="inline-flex items-center gap-1 text-[11px] text-text-muted bg-[var(--border-divider)] px-1.5 py-[1px] rounded">
             <GitBranch size={9} strokeWidth={2.5} />
-            {ticket.target_repo.split("/")[1]}
+            {repoLabel}
           </span>
 
           {/* Duration */}
@@ -114,6 +129,12 @@ export function TicketCard({ ticket, onClick, onStartBuild, onDragStart, onDragE
               }}
             >
               {ticket.current_phase}
+            </span>
+          )}
+
+          {ticket.status === "in_progress" && changedFiles > 0 && (
+            <span className="text-[10px] font-semibold px-1.5 py-[2px] rounded tracking-wide uppercase bg-[var(--accent-bg)] text-accent">
+              {changedFiles} file{changedFiles === 1 ? "" : "s"}
             </span>
           )}
 
@@ -145,6 +166,43 @@ export function TicketCard({ ticket, onClick, onStartBuild, onDragStart, onDragE
             {formatRelativeTime(ticket.created_at)}
           </span>
         </div>
+
+        {ticket.status === "in_progress" && activeStep && (
+          <div className="mt-2.5 rounded-md bg-[var(--status-in-progress-bg)] px-2 py-1.5 text-[11px] text-[var(--status-in-progress)]">
+            Live plan: {activeStep}
+          </div>
+        )}
+
+        {(ticket.status === "review" || ticket.status === "done") && ticket.review_result && (
+          <div className="mt-2.5 rounded-md border border-border-divider px-2.5 py-2">
+            <div className="flex items-center gap-1.5 text-[11px] font-medium text-text-primary">
+              <CheckCircle2 size={12} style={{ color: "var(--status-review)" }} />
+              Review ready
+            </div>
+            <div className="mt-1 text-[11px] text-text-secondary">
+              {passCount}/{totalCriteria} criteria passed
+            </div>
+          </div>
+        )}
+
+        {ticket.status === "failed" && (
+          <div className="mt-2.5 rounded-md border px-2.5 py-2" style={{ borderColor: "var(--status-failed)", background: "var(--status-failed-bg)" }}>
+            <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: "var(--status-failed)" }}>
+              <AlertTriangle size={12} />
+              Build failed
+            </div>
+            <div className="mt-1 text-[11px] text-text-secondary line-clamp-2">
+              {ticket.last_error || "The build ended in an error state. Open the ticket to retry."}
+            </div>
+          </div>
+        )}
+
+        {ticket.status === "failed" && onStartBuild && (
+          <div className="mt-2.5 flex items-center gap-2 text-[11px] text-text-muted">
+            <Circle size={8} fill="currentColor" />
+            Retry available
+          </div>
+        )}
       </div>
 
       {/* Micro progress bar for in_progress */}

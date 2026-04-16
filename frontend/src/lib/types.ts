@@ -55,6 +55,7 @@ export interface Ticket {
   build_completed_at: string | null;
   build_duration_seconds: number | null;
   rejection_feedback: string | null;
+  last_error?: string | null;
   agent_plan: PlanStep[] | null;
   agent_diff: string | null;
   agent_logs: AgentLog[];
@@ -80,7 +81,7 @@ export interface RejectTicketRequest {
 export interface WSMessage {
   type: string;
   ticket_id: string;
-  data: any;
+  data: Record<string, unknown>;
 }
 
 export type TicketAction =
@@ -88,8 +89,10 @@ export type TicketAction =
   | { type: "ADD_TICKET"; ticket: Ticket }
   | { type: "UPDATE_TICKET"; ticket: Ticket }
   | { type: "UPDATE_STATUS"; ticket_id: string; status: TicketStatus }
+  | { type: "UPDATE_PHASE"; ticket_id: string; phase: string | null }
   | { type: "UPDATE_PLAN"; ticket_id: string; plan: PlanStep[] }
   | { type: "UPDATE_DIFF"; ticket_id: string; diff: string }
   | { type: "ADD_LOG"; ticket_id: string; log: AgentLog }
   | { type: "UPDATE_REVIEW"; ticket_id: string; review: ReviewResult }
-  | { type: "UPDATE_OUTPUTS"; ticket_id: string; outputs: Partial<TicketOutputs> };
+  | { type: "UPDATE_OUTPUTS"; ticket_id: string; outputs: Partial<TicketOutputs> }
+  | { type: "SET_ERROR"; ticket_id: string; error: string | null };
