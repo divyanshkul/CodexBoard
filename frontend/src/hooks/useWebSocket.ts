@@ -1,155 +1,96 @@
-import { useEffect, useRef, useState, useCallback, type Dispatch } from 'react'
-import type { TicketAction } from './useTickets'
-import type { WSMessage, PlanStep, AgentLog, ReviewResult, Ticket } from '../types'
+"use client";
+
+import { useEffect, useRef, useCallback } from "react";
+import { TicketAction, WSMessage } from "../lib/types";
+import { mockWS } from "../mock/mockWebSocket";
 
 export function useWebSocket(
-  url: string,
-  dispatch: Dispatch<TicketAction>,
-): { connected: boolean; reconnect: () => void } {
-  const [connected, setConnected] = useState(false)
-  const wsRef = useRef<WebSocket | null>(null)
-  const retryRef = useRef(0)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  dispatch: React.Dispatch<TicketAction>,
+  useMock = true
+) {
+  const wsRef = useRef<WebSocket | null>(null);
 
   const handleMessage = useCallback(
-    (event: MessageEvent) => {
-      let msg: WSMessage
-      try {
-        msg = JSON.parse(event.data) as WSMessage
-      } catch {
-        return
-      }
-
-      const { type, ticket_id, data } = msg
-
-      switch (type) {
-        case 'ticket_status_changed':
-          if (data.ticket) {
-            dispatch({ type: 'UPDATE_TICKET', ticket: data.ticket as Ticket })
-          }
-          break
-
-        case 'agent_plan_updated':
-          if (data.plan) {
-            dispatch({
-              type: 'UPDATE_PLAN',
-              ticket_id,
-              plan: data.plan as PlanStep[],
-              explanation: data.explanation as string | undefined,
-            })
-          }
-          break
-
-        case 'agent_diff_updated':
-          if (data.diff !== undefined) {
-            dispatch({
-              type: 'UPDATE_DIFF',
-              ticket_id,
-              diff: data.diff as string,
-            })
-          }
-          break
-
-        case 'agent_log':
-          if (data.log) {
-            dispatch({
-              type: 'APPEND_LOG',
-              ticket_id,
-              log: data.log as AgentLog,
-            })
-          }
-          break
-
-        case 'review_started':
-          // No specific state update needed, card already shows reviewing
-          break
-
-        case 'review_complete':
-          if (data.review_result) {
-            dispatch({
-              type: 'SET_REVIEW',
-              ticket_id,
-              review_result: data.review_result as ReviewResult,
-            })
-          }
-          if (data.ticket) {
-            dispatch({ type: 'UPDATE_TICKET', ticket: data.ticket as Ticket })
-          }
-          break
-
-        case 'output_ready':
-          if (data.output_type && data.outputs) {
-            dispatch({
-              type: 'SET_OUTPUT',
-              ticket_id,
-              output_type: data.output_type as string,
-              data: data.outputs as Record<string, unknown>,
-            })
-          }
-          break
-
-        case 'build_failed':
-          if (data.ticket) {
-            dispatch({ type: 'UPDATE_TICKET', ticket: data.ticket as Ticket })
-          }
-          break
-
-        default:
-          // Unknown event type, ignore
-          break
+    (msg: WSMessage) => {
+      switch (msg.type) {
+        case "status_change":
+          dispatch({
+            type: "UPDATE_STATUS",
+            ticket_id: msg.ticket_id,
+            status: msg.data.status,
+          });
+          break;
+        case "plan_update":
+          dispatch({
+            type: "UPDATE_PLAN",
+            ticket_id: msg.ticket_id,
+            plan: msg.data.plan,
+          });
+          break;
+        case "diff_update":
+          dispatch({
+            type: "UPDATE_DIFF",
+            ticket_id: msg.ticket_id,
+            diff: msg.data.diff,
+          });
+          break;
+        case "log":
+          dispatch({
+            type: "ADD_LOG",
+            ticket_id: msg.ticket_id,
+            log: msg.data.log,
+          });
+          break;
+        case "review_update":
+          dispatch({
+            type: "UPDATE_REVIEW",
+            ticket_id: msg.ticket_id,
+            review: msg.data.review,
+          });
+          break;
+        case "outputs_update":
+          dispatch({
+            type: "UPDATE_OUTPUTS",
+            ticket_id: msg.ticket_id,
+            outputs: msg.data.outputs,
+          });
+          break;
       }
     },
-    [dispatch],
-  )
-
-  const connect = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current)
-    if (wsRef.current) {
-      wsRef.current.onclose = null
-      wsRef.current.close()
-    }
-
-    try {
-      const ws = new WebSocket(url)
-      wsRef.current = ws
-
-      ws.onopen = () => {
-        setConnected(true)
-        retryRef.current = 0
-      }
-
-      ws.onmessage = handleMessage
-
-      ws.onclose = () => {
-        setConnected(false)
-        const delay = Math.min(1000 * 2 ** retryRef.current, 10000)
-        retryRef.current++
-        timerRef.current = setTimeout(connect, delay)
-      }
-
-      ws.onerror = () => {
-        ws.close()
-      }
-    } catch {
-      setConnected(false)
-    }
-  }, [url, handleMessage])
+    [dispatch]
+  );
 
   useEffect(() => {
-    connect()
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current)
-      if (wsRef.current) {
-        wsRef.current.onclose = null
-        wsRef.current.close()
-      }
+    if (useMock) {
+      mockWS.connect(handleMessage);
+      return () => mockWS.disconnect();
     }
-  }, [connect])
 
-  const reconnect = useCallback(() => {
-    retryRef.current = 0
-    connect()
-  }, [connect])
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+    wsRef.current = ws;
 
-  return { connected, reconnect }
+    ws.onmessage = (event) => {
+      const msg: WSMessage = JSON.parse(event.data);
+      handleMessage(msg);
+    };
+
+    return () => {
+      ws.close();
+      wsRef.current = null;
+    };
+  }, [useMock, handleMessage]);
+
+  const startBuild = useCallback(
+    (ticketId: string) => {
+      if (useMock) {
+        mockWS.simulateBuild(ticketId);
+      } else {
+        // Real API call handled separately
+      }
+    },
+    [useMock]
+  );
+
+  return { startBuild };
 }

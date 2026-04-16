@@ -1,195 +1,247 @@
-import type { Dispatch } from 'react'
-import type { TicketAction } from '../hooks/useTickets'
-import type { Ticket, PlanStep, AgentLog } from '../types'
+import { WSMessage, PlanStep, AgentLog, ReviewResult } from "../lib/types";
 
-/**
- * Mock WebSocket that simulates a full build cycle on a timer.
- * Call startMockBuild(ticket, dispatch) to fire a sequence of events
- * that mirror what the real backend would send.
- */
-export function startMockBuild(ticket: Ticket, dispatch: Dispatch<TicketAction>) {
-  const id = ticket.id
-  const timers: ReturnType<typeof setTimeout>[] = []
+type WSHandler = (msg: WSMessage) => void;
 
-  const schedule = (ms: number, fn: () => void) => {
-    timers.push(setTimeout(fn, ms))
+export class MockWebSocket {
+  private handler: WSHandler | null = null;
+  private timeouts: ReturnType<typeof setTimeout>[] = [];
+  private running = false;
+
+  connect(onMessage: WSHandler) {
+    this.handler = onMessage;
   }
 
-  const now = () => new Date().toISOString()
+  disconnect() {
+    this.handler = null;
+    this.timeouts.forEach(clearTimeout);
+    this.timeouts = [];
+    this.running = false;
+  }
 
-  // t=0s: status -> in_progress
-  schedule(0, () => {
-    const updated: Ticket = {
-      ...ticket,
-      status: 'in_progress',
-      build_started_at: now(),
-      current_phase: 'building',
-      agent_plan: null,
-      agent_diff: null,
-      agent_logs: [],
-      review_result: null,
-    }
-    dispatch({ type: 'UPDATE_TICKET', ticket: updated })
-  })
+  simulateBuild(ticketId: string) {
+    if (this.running) return;
+    this.running = true;
 
-  // t=1.5s: plan updated (step 1 inProgress)
-  const planStages: PlanStep[][] = [
-    [
-      { step: 'Analyze codebase structure', status: 'inProgress' },
-      { step: 'Implement core feature logic', status: 'pending' },
-      { step: 'Create UI components', status: 'pending' },
-      { step: 'Write tests', status: 'pending' },
-    ],
-    [
-      { step: 'Analyze codebase structure', status: 'completed' },
-      { step: 'Implement core feature logic', status: 'inProgress' },
-      { step: 'Create UI components', status: 'pending' },
-      { step: 'Write tests', status: 'pending' },
-    ],
-    [
-      { step: 'Analyze codebase structure', status: 'completed' },
-      { step: 'Implement core feature logic', status: 'completed' },
-      { step: 'Create UI components', status: 'inProgress' },
-      { step: 'Write tests', status: 'pending' },
-    ],
-    [
-      { step: 'Analyze codebase structure', status: 'completed' },
-      { step: 'Implement core feature logic', status: 'completed' },
-      { step: 'Create UI components', status: 'completed' },
-      { step: 'Write tests', status: 'inProgress' },
-    ],
-    [
-      { step: 'Analyze codebase structure', status: 'completed' },
-      { step: 'Implement core feature logic', status: 'completed' },
-      { step: 'Create UI components', status: 'completed' },
-      { step: 'Write tests', status: 'completed' },
-    ],
-  ]
+    const send = (msg: WSMessage) => {
+      if (this.handler) this.handler(msg);
+    };
 
-  schedule(1500, () => dispatch({ type: 'UPDATE_PLAN', ticket_id: id, plan: planStages[0] }))
+    const schedule = (fn: () => void, ms: number) => {
+      this.timeouts.push(setTimeout(fn, ms));
+    };
 
-  // t=3s: log + plan step 1 complete
-  schedule(3000, () => {
-    const log: AgentLog = { timestamp: now(), type: 'agent_message', message: 'Analyzed codebase. Found React Router with existing component patterns.' }
-    dispatch({ type: 'APPEND_LOG', ticket_id: id, log })
-    dispatch({ type: 'UPDATE_PLAN', ticket_id: id, plan: planStages[1] })
-  })
+    // t=0s: Status -> in_progress
+    schedule(() => {
+      send({
+        type: "status_change",
+        ticket_id: ticketId,
+        data: { status: "in_progress", phase: "planning" },
+      });
+    }, 500);
 
-  // t=5s: diff appears
-  schedule(5000, () => {
-    dispatch({
-      type: 'UPDATE_DIFF',
-      ticket_id: id,
-      diff: `diff --git a/src/components/Feature.tsx b/src/components/Feature.tsx
+    // t=2s: Plan appears
+    const planSteps: PlanStep[] = [
+      { step: "Analyze codebase and understand patterns", status: "pending" },
+      { step: "Create component structure", status: "pending" },
+      { step: "Implement core logic", status: "pending" },
+      { step: "Add styling and animations", status: "pending" },
+      { step: "Write tests", status: "pending" },
+    ];
+
+    schedule(() => {
+      send({
+        type: "plan_update",
+        ticket_id: ticketId,
+        data: { plan: planSteps },
+      });
+    }, 2000);
+
+    // t=4s: Step 1 in progress + log
+    schedule(() => {
+      planSteps[0].status = "inProgress";
+      send({
+        type: "plan_update",
+        ticket_id: ticketId,
+        data: { plan: [...planSteps] },
+      });
+      send({
+        type: "log",
+        ticket_id: ticketId,
+        data: {
+          log: {
+            timestamp: new Date().toISOString(),
+            type: "agent_message",
+            message: "Analyzing existing codebase patterns...",
+          } as AgentLog,
+        },
+      });
+    }, 4000);
+
+    // t=7s: Step 1 done, step 2 in progress
+    schedule(() => {
+      planSteps[0].status = "completed";
+      planSteps[1].status = "inProgress";
+      send({
+        type: "plan_update",
+        ticket_id: ticketId,
+        data: { plan: [...planSteps] },
+      });
+      send({
+        type: "log",
+        ticket_id: ticketId,
+        data: {
+          log: {
+            timestamp: new Date().toISOString(),
+            type: "command",
+            message: "mkdir -p src/components/feature",
+          } as AgentLog,
+        },
+      });
+    }, 7000);
+
+    // t=10s: Step 2 done, step 3 in progress + diff starts
+    schedule(() => {
+      planSteps[1].status = "completed";
+      planSteps[2].status = "inProgress";
+      send({
+        type: "plan_update",
+        ticket_id: ticketId,
+        data: { plan: [...planSteps] },
+      });
+      send({
+        type: "log",
+        ticket_id: ticketId,
+        data: {
+          log: {
+            timestamp: new Date().toISOString(),
+            type: "file_change",
+            message: "Created src/components/feature/index.tsx",
+          } as AgentLog,
+        },
+      });
+      send({
+        type: "diff_update",
+        ticket_id: ticketId,
+        data: {
+          diff: `diff --git a/src/components/feature/index.tsx b/src/components/feature/index.tsx
 new file mode 100644
 --- /dev/null
-+++ b/src/components/Feature.tsx
-@@ -0,0 +1,24 @@
-+import React from 'react';
++++ b/src/components/feature/index.tsx
+@@ -0,0 +1,15 @@
++import { useState } from 'react';
 +
 +export function Feature() {
-+  return <div>New feature component</div>;
++  const [active, setActive] = useState(false);
++
++  return (
++    <div className="feature-container">
++      <button onClick={() => setActive(!active)}>
++        Toggle Feature
++      </button>
++      {active && <div className="feature-content">Active!</div>}
++    </div>
++  );
 +}`,
-    })
-    const log: AgentLog = { timestamp: now(), type: 'file_change', message: 'Created src/components/Feature.tsx' }
-    dispatch({ type: 'APPEND_LOG', ticket_id: id, log })
-  })
+        },
+      });
+    }, 10000);
 
-  // t=7s: step 2 complete
-  schedule(7000, () => dispatch({ type: 'UPDATE_PLAN', ticket_id: id, plan: planStages[2] }))
+    // t=14s: Steps 3-4 done, step 5 in progress
+    schedule(() => {
+      planSteps[2].status = "completed";
+      planSteps[3].status = "completed";
+      planSteps[4].status = "inProgress";
+      send({
+        type: "plan_update",
+        ticket_id: ticketId,
+        data: { plan: [...planSteps] },
+      });
+      send({
+        type: "log",
+        ticket_id: ticketId,
+        data: {
+          log: {
+            timestamp: new Date().toISOString(),
+            type: "command",
+            message: "npm run test -- --run src/components/feature/",
+          } as AgentLog,
+        },
+      });
+    }, 14000);
 
-  // t=9s: more files, step 3 complete
-  schedule(9000, () => {
-    dispatch({
-      type: 'UPDATE_DIFF',
-      ticket_id: id,
-      diff: `diff --git a/src/components/Feature.tsx b/src/components/Feature.tsx
-new file mode 100644
---- /dev/null
-+++ b/src/components/Feature.tsx
-@@ -0,0 +1,24 @@
-+import React from 'react';
-+export function Feature() { return <div>New feature</div>; }
-diff --git a/src/components/FeatureForm.tsx b/src/components/FeatureForm.tsx
-new file mode 100644
---- /dev/null
-+++ b/src/components/FeatureForm.tsx
-@@ -0,0 +1,18 @@
-+import React, { useState } from 'react';
-+export function FeatureForm() { return <form>...</form>; }
-diff --git a/src/routes.tsx b/src/routes.tsx
---- a/src/routes.tsx
-+++ b/src/routes.tsx
-@@ -5,6 +5,8 @@
-+import { Feature } from './components/Feature';
-+    <Route path="/feature" element={<Feature />} />`,
-    })
-    dispatch({ type: 'UPDATE_PLAN', ticket_id: id, plan: planStages[3] })
-    const log: AgentLog = { timestamp: now(), type: 'command', message: 'npm run typecheck -- passed' }
-    dispatch({ type: 'APPEND_LOG', ticket_id: id, log })
-  })
+    // t=18s: All done, move to review
+    schedule(() => {
+      planSteps[4].status = "completed";
+      send({
+        type: "plan_update",
+        ticket_id: ticketId,
+        data: { plan: [...planSteps] },
+      });
+      send({
+        type: "status_change",
+        ticket_id: ticketId,
+        data: { status: "review", phase: "review" },
+      });
+      send({
+        type: "log",
+        ticket_id: ticketId,
+        data: {
+          log: {
+            timestamp: new Date().toISOString(),
+            type: "info",
+            message: "Build complete. Running automated review...",
+          } as AgentLog,
+        },
+      });
+    }, 18000);
 
-  // t=12s: all steps done
-  schedule(12000, () => {
-    dispatch({ type: 'UPDATE_PLAN', ticket_id: id, plan: planStages[4] })
-    const log: AgentLog = { timestamp: now(), type: 'info', message: 'All tests passed. Build complete.' }
-    dispatch({ type: 'APPEND_LOG', ticket_id: id, log })
-  })
-
-  // t=14s: move to review
-  schedule(14000, () => {
-    const buildStarted = ticket.build_started_at || now()
-    const durationMs = Date.now() - new Date(buildStarted).getTime()
-    const reviewTicket: Ticket = {
-      ...ticket,
-      status: 'review',
-      build_completed_at: now(),
-      build_duration_seconds: durationMs / 1000,
-      current_phase: 'reviewing',
-      agent_plan: planStages[4],
-    }
-    dispatch({ type: 'UPDATE_TICKET', ticket: reviewTicket })
-  })
-
-  // t=18s: review complete
-  schedule(18000, () => {
-    dispatch({
-      type: 'SET_REVIEW',
-      ticket_id: id,
-      review_result: {
-        criteria_results: ticket.acceptance_criteria.map(c => ({
-          criterion: c,
-          status: 'pass' as const,
-          explanation: 'Implementation correctly satisfies this criterion.',
-        })),
-        summary: 'Feature implemented correctly. Code follows existing patterns and all acceptance criteria are met.',
-        raw_review_text: 'Full review text from mock Codex review...',
+    // t=22s: Review result
+    schedule(() => {
+      const review: ReviewResult = {
+        criteria_results: [
+          {
+            criterion: "Feature implemented correctly",
+            status: "pass",
+            explanation: "Component renders and toggles state as expected.",
+          },
+          {
+            criterion: "Tests pass",
+            status: "pass",
+            explanation: "All 8 unit tests pass successfully.",
+          },
+          {
+            criterion: "Code quality",
+            status: "pass",
+            explanation: "Follows existing code patterns and conventions.",
+          },
+        ],
+        summary: "All criteria met. Implementation is clean and well-tested.",
+        raw_review_text: "Automated review passed all checks.",
         files_changed: 3,
-        risk_level: 'low',
-      },
-    })
-  })
+        risk_level: "low",
+      };
+      send({
+        type: "review_update",
+        ticket_id: ticketId,
+        data: { review },
+      });
+    }, 22000);
 
-  // t=20s: output screenshots
-  schedule(20000, () => {
-    dispatch({
-      type: 'SET_OUTPUT',
-      ticket_id: id,
-      output_type: 'before_screenshots',
-      data: { '/': 'before/root.png' },
-    })
-  })
-
-  // t=22s: after screenshots
-  schedule(22000, () => {
-    dispatch({
-      type: 'SET_OUTPUT',
-      ticket_id: id,
-      output_type: 'after_screenshots',
-      data: { '/': 'after/root.png' },
-    })
-  })
-
-  // Return cleanup function
-  return () => timers.forEach(clearTimeout)
+    // t=25s: Outputs
+    schedule(() => {
+      send({
+        type: "outputs_update",
+        ticket_id: ticketId,
+        data: {
+          outputs: {
+            after_screenshots: { main: `/outputs/${ticketId}/after/main.png` },
+            markdown_path: `/outputs/${ticketId}/summary.md`,
+          },
+        },
+      });
+      this.running = false;
+    }, 25000);
+  }
 }
+
+export const mockWS = new MockWebSocket();

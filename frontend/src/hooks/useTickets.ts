@@ -1,118 +1,87 @@
-import { useReducer, useCallback, useEffect } from 'react'
-import type { Ticket, TicketStatus, PlanStep, AgentLog, ReviewResult } from '../types'
-import { listTickets } from '../api'
+"use client";
 
-export type TicketAction =
-  | { type: 'SET_TICKETS'; tickets: Ticket[] }
-  | { type: 'ADD_TICKET'; ticket: Ticket }
-  | { type: 'UPDATE_TICKET'; ticket: Ticket }
-  | { type: 'UPDATE_PLAN'; ticket_id: string; plan: PlanStep[]; explanation?: string }
-  | { type: 'UPDATE_DIFF'; ticket_id: string; diff: string }
-  | { type: 'APPEND_LOG'; ticket_id: string; log: AgentLog }
-  | { type: 'SET_REVIEW'; ticket_id: string; review_result: ReviewResult }
-  | { type: 'SET_OUTPUT'; ticket_id: string; output_type: string; data: Record<string, unknown> }
+import { useReducer, useCallback, useEffect, useState } from "react";
+import { Ticket, TicketAction, TicketStatus } from "../lib/types";
+import { api } from "../lib/api";
+import { mockTickets } from "../mock/mockData";
 
-function updateTicketById(state: Ticket[], id: string, updater: (t: Ticket) => Ticket): Ticket[] {
-  const idx = state.findIndex(t => t.id === id)
-  if (idx === -1) return state
-  const copy = [...state]
-  copy[idx] = updater(copy[idx])
-  return copy
-}
-
-export function ticketReducer(state: Ticket[], action: TicketAction): Ticket[] {
+function ticketReducer(state: Ticket[], action: TicketAction): Ticket[] {
   switch (action.type) {
-    case 'SET_TICKETS':
-      return action.tickets
+    case "SET_TICKETS":
+      return action.tickets;
 
-    case 'ADD_TICKET':
-      return [...state, action.ticket]
+    case "ADD_TICKET":
+      return [...state, action.ticket];
 
-    case 'UPDATE_TICKET':
-      return state.map(t => t.id === action.ticket.id ? action.ticket : t)
+    case "UPDATE_TICKET":
+      return state.map((t) => (t.id === action.ticket.id ? action.ticket : t));
 
-    case 'UPDATE_PLAN':
-      return updateTicketById(state, action.ticket_id, t => ({
-        ...t,
-        agent_plan: action.plan,
-      }))
+    case "UPDATE_STATUS":
+      return state.map((t) =>
+        t.id === action.ticket_id ? { ...t, status: action.status } : t
+      );
 
-    case 'UPDATE_DIFF':
-      return updateTicketById(state, action.ticket_id, t => ({
-        ...t,
-        agent_diff: action.diff,
-      }))
+    case "UPDATE_PLAN":
+      return state.map((t) =>
+        t.id === action.ticket_id ? { ...t, agent_plan: action.plan } : t
+      );
 
-    case 'APPEND_LOG':
-      return updateTicketById(state, action.ticket_id, t => ({
-        ...t,
-        agent_logs: [...t.agent_logs, action.log],
-      }))
+    case "UPDATE_DIFF":
+      return state.map((t) =>
+        t.id === action.ticket_id ? { ...t, agent_diff: action.diff } : t
+      );
 
-    case 'SET_REVIEW':
-      return updateTicketById(state, action.ticket_id, t => ({
-        ...t,
-        review_result: action.review_result,
-      }))
+    case "ADD_LOG":
+      return state.map((t) =>
+        t.id === action.ticket_id
+          ? { ...t, agent_logs: [...t.agent_logs, action.log] }
+          : t
+      );
 
-    case 'SET_OUTPUT': {
-      return updateTicketById(state, action.ticket_id, t => {
-        const outputs = { ...t.outputs }
-        switch (action.output_type) {
-          case 'before_screenshots':
-            outputs.before_screenshots = {
-              ...outputs.before_screenshots,
-              ...(action.data as Record<string, string>),
-            }
-            break
-          case 'after_screenshots':
-            outputs.after_screenshots = {
-              ...outputs.after_screenshots,
-              ...(action.data as Record<string, string>),
-            }
-            break
-          case 'diff_heatmaps':
-            outputs.diff_heatmaps = {
-              ...outputs.diff_heatmaps,
-              ...(action.data as Record<string, string>),
-            }
-            break
-          case 'video':
-            outputs.video_path = (action.data as { path?: string }).path ?? null
-            break
-          case 'markdown':
-            outputs.markdown_path = (action.data as { path?: string }).path ?? null
-            break
-        }
-        return { ...t, outputs }
-      })
-    }
+    case "UPDATE_REVIEW":
+      return state.map((t) =>
+        t.id === action.ticket_id ? { ...t, review_result: action.review } : t
+      );
+
+    case "UPDATE_OUTPUTS":
+      return state.map((t) =>
+        t.id === action.ticket_id
+          ? { ...t, outputs: { ...t.outputs, ...action.outputs } }
+          : t
+      );
 
     default:
-      return state
+      return state;
   }
 }
 
-export function useTickets(initialTickets: Ticket[] = []) {
-  const [tickets, dispatch] = useReducer(ticketReducer, initialTickets)
-
-  const getTicketsByStatus = useCallback(
-    (status: TicketStatus) => tickets.filter(t => t.status === status),
-    [tickets],
-  )
-
-  const loadTickets = useCallback(async () => {
-    try {
-      const data = await listTickets()
-      dispatch({ type: 'SET_TICKETS', tickets: data })
-    } catch {
-      // API not available, keep current state (mock data)
-    }
-  }, [])
+export function useTickets(useMock = true) {
+  const [tickets, dispatch] = useReducer(ticketReducer, []);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadTickets()
-  }, [loadTickets])
+    if (useMock) {
+      dispatch({ type: "SET_TICKETS", tickets: mockTickets });
+      setLoading(false);
+    } else {
+      api
+        .getTickets()
+        .then((data) => {
+          dispatch({ type: "SET_TICKETS", tickets: data });
+          setLoading(false);
+        })
+        .catch((err) => {
+          setError(err.message);
+          setLoading(false);
+        });
+    }
+  }, [useMock]);
 
-  return { tickets, dispatch, getTicketsByStatus, loadTickets }
+  const getByStatus = useCallback(
+    (status: TicketStatus) => tickets.filter((t) => t.status === status),
+    [tickets]
+  );
+
+  return { tickets, dispatch, loading, error, getByStatus };
 }

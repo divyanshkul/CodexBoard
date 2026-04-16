@@ -1,19 +1,31 @@
-import type { Ticket } from '../types'
+import { Ticket } from "../lib/types";
+
+const now = new Date().toISOString();
+const hourAgo = new Date(Date.now() - 3600000).toISOString();
+const twoHoursAgo = new Date(Date.now() - 7200000).toISOString();
+const threeHoursAgo = new Date(Date.now() - 10800000).toISOString();
 
 export const mockTickets: Ticket[] = [
   {
-    id: 'cb-001-todo',
-    title: 'Add dark mode toggle to settings',
-    description: 'Add a toggle switch on the /settings page that allows users to switch between light and dark theme. The preference should persist in localStorage.',
+    id: "TKT-001",
+    title: "Add dark mode toggle",
+    description:
+      "Add a dark mode toggle button to the top navigation bar that switches between light and dark themes. Should persist the user's preference in localStorage.",
     acceptance_criteria: [
-      'Toggle switch is visible on /settings page',
-      'Clicking toggle switches between light and dark theme',
-      'Preference persists across page reloads',
+      "Toggle button visible in the nav bar",
+      "Clicking toggles between light and dark themes",
+      "Preference persists across page reloads",
+      "Smooth transition between themes",
     ],
-    target_repo: '/home/user/projects/my-app',
-    output_preferences: { screenshots: true, pixel_diff: true, video: false, markdown: true },
-    status: 'todo',
-    created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    target_repo: "acme/web-app",
+    output_preferences: {
+      screenshots: true,
+      pixel_diff: true,
+      video: false,
+      markdown: true,
+    },
+    status: "todo",
+    created_at: hourAgo,
     build_started_at: null,
     build_completed_at: null,
     build_duration_seconds: null,
@@ -34,344 +46,408 @@ export const mockTickets: Ticket[] = [
     worktree_path: null,
   },
   {
-    id: 'cb-002-progress',
-    title: 'Implement password reset flow',
-    description: 'Build a complete password reset flow: forgot password page at /forgot-password, email with reset link, /reset-password page with new password form.',
+    id: "TKT-002",
+    title: "Implement password reset flow",
+    description:
+      "Build the complete password reset flow including the request form, email sending, token validation, and new password form.",
     acceptance_criteria: [
-      'Forgot password form sends reset email',
-      'Reset link opens /reset-password page',
-      'New password is validated and saved',
-      'User can log in with new password',
-      'Error handling for invalid/expired tokens',
+      "User can request password reset via email",
+      "Reset email contains a valid token link",
+      "Token expires after 1 hour",
+      "User can set a new password with the valid token",
+      "Invalid or expired tokens show an error",
     ],
-    target_repo: '/home/user/projects/auth-service',
-    output_preferences: { screenshots: true, pixel_diff: false, video: true, markdown: true },
-    status: 'in_progress',
-    created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    build_started_at: new Date(Date.now() - 8 * 60 * 1000).toISOString(),
+    target_repo: "acme/web-app",
+    output_preferences: {
+      screenshots: true,
+      pixel_diff: true,
+      video: true,
+      markdown: true,
+    },
+    status: "in_progress",
+    created_at: twoHoursAgo,
+    build_started_at: hourAgo,
     build_completed_at: null,
     build_duration_seconds: null,
     rejection_feedback: null,
     agent_plan: [
-      { step: 'Analyze codebase structure and auth patterns', status: 'completed' },
-      { step: 'Create ForgotPassword component and route', status: 'completed' },
-      { step: 'Build ResetPassword form with validation', status: 'inProgress' },
-      { step: 'Add email service integration', status: 'pending' },
-      { step: 'Write unit and integration tests', status: 'pending' },
+      { step: "Analyze existing auth module structure", status: "completed" },
+      { step: "Create password reset request endpoint", status: "completed" },
+      { step: "Build email template and sending logic", status: "inProgress" },
+      { step: "Implement token validation middleware", status: "pending" },
+      { step: "Create new password form component", status: "pending" },
+      { step: "Add integration tests", status: "pending" },
     ],
-    agent_diff: `diff --git a/src/components/ForgotPassword.tsx b/src/components/ForgotPassword.tsx
+    agent_diff: `diff --git a/src/auth/reset.ts b/src/auth/reset.ts
 new file mode 100644
 --- /dev/null
-+++ b/src/components/ForgotPassword.tsx
-@@ -0,0 +1,47 @@
-+import React, { useState } from 'react';
-+import { sendResetEmail } from '../api/auth';
++++ b/src/auth/reset.ts
+@@ -0,0 +1,42 @@
++import { randomBytes } from 'crypto';
++import { db } from '../database';
++import { sendEmail } from '../email';
 +
-+export function ForgotPassword() {
-+  const [email, setEmail] = useState('');
-+  const [sent, setSent] = useState(false);
++export async function requestPasswordReset(email: string) {
++  const user = await db.users.findByEmail(email);
++  if (!user) return; // Silent fail for security
 +
-+  const handleSubmit = async (e) => {
-+    e.preventDefault();
-+    await sendResetEmail(email);
-+    setSent(true);
-+  };
++  const token = randomBytes(32).toString('hex');
++  const expires = new Date(Date.now() + 3600000);
++
++  await db.resetTokens.create({
++    userId: user.id,
++    token,
++    expiresAt: expires,
++  });
++
++  await sendEmail({
++    to: email,
++    subject: 'Password Reset Request',
++    template: 'password-reset',
++    data: { token, userName: user.name },
++  });
++}`,
+    agent_logs: [
+      {
+        timestamp: new Date(Date.now() - 1800000).toISOString(),
+        type: "info",
+        message: "Starting build for TKT-002",
+      },
+      {
+        timestamp: new Date(Date.now() - 1700000).toISOString(),
+        type: "agent_message",
+        message: "Analyzing existing auth module to understand patterns...",
+      },
+      {
+        timestamp: new Date(Date.now() - 1500000).toISOString(),
+        type: "command",
+        message: "grep -r 'auth' src/ --include='*.ts' -l",
+      },
+      {
+        timestamp: new Date(Date.now() - 1200000).toISOString(),
+        type: "file_change",
+        message: "Created src/auth/reset.ts",
+      },
+      {
+        timestamp: new Date(Date.now() - 900000).toISOString(),
+        type: "agent_message",
+        message: "Building email template with reset link...",
+      },
+    ],
+    review_result: null,
+    outputs: {
+      before_screenshots: {},
+      after_screenshots: {},
+      diff_heatmaps: {},
+      video_path: null,
+      markdown_path: null,
+    },
+    current_phase: "coding",
+    codex_thread_id: "thread_abc123",
+    worktree_path: "/tmp/codex/tkt-002",
+  },
+  {
+    id: "TKT-003",
+    title: "Add search to navigation bar",
+    description:
+      "Implement a search component in the main navigation bar with autocomplete suggestions and keyboard navigation support.",
+    acceptance_criteria: [
+      "Search input visible in navigation bar",
+      "Autocomplete suggestions appear while typing",
+      "Keyboard navigation works (up/down arrows, enter to select)",
+      "Search results page shows filtered results",
+      "Empty state handled gracefully",
+    ],
+    target_repo: "acme/web-app",
+    output_preferences: {
+      screenshots: true,
+      pixel_diff: true,
+      video: false,
+      markdown: true,
+    },
+    status: "review",
+    created_at: threeHoursAgo,
+    build_started_at: twoHoursAgo,
+    build_completed_at: hourAgo,
+    build_duration_seconds: 3600,
+    rejection_feedback: null,
+    agent_plan: [
+      { step: "Design search component architecture", status: "completed" },
+      { step: "Implement search input with debouncing", status: "completed" },
+      { step: "Build autocomplete dropdown", status: "completed" },
+      { step: "Add keyboard navigation", status: "completed" },
+      { step: "Create search results page", status: "completed" },
+      { step: "Write unit and integration tests", status: "completed" },
+    ],
+    agent_diff: `diff --git a/src/components/SearchBar.tsx b/src/components/SearchBar.tsx
+new file mode 100644
+--- /dev/null
++++ b/src/components/SearchBar.tsx
+@@ -0,0 +1,85 @@
++import { useState, useCallback, useRef } from 'react';
++import { useDebounce } from '../hooks/useDebounce';
++import { searchApi } from '../api/search';
++
++export function SearchBar() {
++  const [query, setQuery] = useState('');
++  const [results, setResults] = useState([]);
++  const [selectedIndex, setSelectedIndex] = useState(-1);
++  const debouncedQuery = useDebounce(query, 300);
++
++  const handleKeyDown = useCallback((e) => {
++    if (e.key === 'ArrowDown') {
++      setSelectedIndex(i => Math.min(i + 1, results.length - 1));
++    } else if (e.key === 'ArrowUp') {
++      setSelectedIndex(i => Math.max(i - 1, 0));
++    } else if (e.key === 'Enter' && selectedIndex >= 0) {
++      navigateToResult(results[selectedIndex]);
++    }
++  }, [results, selectedIndex]);
 +
 +  return (
-+    <div className="reset-container">
-+      <h2>Reset your password</h2>
-+      {sent ? (
-+        <p>Check your email for a reset link.</p>
-+      ) : (
-+        <form onSubmit={handleSubmit}>
-+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} />
-+          <button type="submit">Send Reset Link</button>
-+        </form>
++    <div className="search-container">
++      <input
++        type="text"
++        value={query}
++        onChange={(e) => setQuery(e.target.value)}
++        onKeyDown={handleKeyDown}
++        placeholder="Search..."
++      />
++      {results.length > 0 && (
++        <ul className="search-results">
++          {results.map((result, i) => (
++            <li key={result.id} className={i === selectedIndex ? 'selected' : ''}>
++              {result.title}
++            </li>
++          ))}
++        </ul>
 +      )}
 +    </div>
 +  );
-+}
-diff --git a/src/api/auth.ts b/src/api/auth.ts
---- a/src/api/auth.ts
-+++ b/src/api/auth.ts
-@@ -10,6 +10,14 @@
-+export async function sendResetEmail(email: string): Promise<void> {
-+  await fetch('/api/auth/reset', {
-+    method: 'POST',
-+    body: JSON.stringify({ email }),
-+  });
-+}
-+
-+export async function resetPassword(token: string, password: string): Promise<void> {
-+  await fetch('/api/auth/reset/confirm', {
-+    method: 'POST',
-+    body: JSON.stringify({ token, password }),
-+  });
-+}
-diff --git a/src/routes.tsx b/src/routes.tsx
---- a/src/routes.tsx
-+++ b/src/routes.tsx
-@@ -5,6 +5,8 @@
-+import { ForgotPassword } from './components/ForgotPassword';
-+import { ResetPassword } from './components/ResetPassword';
-@@ -12,6 +14,8 @@
-+    <Route path="/forgot-password" element={<ForgotPassword />} />
-+    <Route path="/reset-password" element={<ResetPassword />} />`,
++}`,
     agent_logs: [
       {
-        timestamp: new Date(Date.now() - 7 * 60 * 1000).toISOString(),
-        type: 'info',
-        message: 'Starting analysis of codebase structure...',
+        timestamp: new Date(Date.now() - 7000000).toISOString(),
+        type: "info",
+        message: "Starting build for TKT-003",
       },
       {
-        timestamp: new Date(Date.now() - 6 * 60 * 1000).toISOString(),
-        type: 'agent_message',
-        message: 'Found React Router setup with existing auth pages. Will follow the same patterns.',
+        timestamp: new Date(Date.now() - 6800000).toISOString(),
+        type: "agent_message",
+        message: "Planning search component architecture...",
       },
       {
-        timestamp: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-        type: 'file_change',
-        message: 'Created src/components/ForgotPassword.tsx',
+        timestamp: new Date(Date.now() - 6000000).toISOString(),
+        type: "file_change",
+        message: "Created src/components/SearchBar.tsx",
       },
       {
-        timestamp: new Date(Date.now() - 4 * 60 * 1000).toISOString(),
-        type: 'command',
-        message: 'npm run typecheck -- passed',
+        timestamp: new Date(Date.now() - 5000000).toISOString(),
+        type: "file_change",
+        message: "Created src/hooks/useDebounce.ts",
       },
       {
-        timestamp: new Date(Date.now() - 3 * 60 * 1000).toISOString(),
-        type: 'file_change',
-        message: 'Updated src/api/auth.ts with reset functions',
-      },
-    ],
-    review_result: null,
-    outputs: {
-      before_screenshots: {},
-      after_screenshots: {},
-      diff_heatmaps: {},
-      video_path: null,
-      markdown_path: null,
-    },
-    current_phase: 'building',
-    codex_thread_id: 'thread_mock_002',
-    worktree_path: '/tmp/workspaces/ticket-cb-002',
-  },
-  {
-    id: 'cb-003-review',
-    title: 'Add search to navigation bar',
-    description: 'Add a search input to the top navigation bar on all pages. Results should filter as the user types, showing matching page titles and content snippets.',
-    acceptance_criteria: [
-      'Search input appears in navigation bar',
-      'Results filter as user types (debounced)',
-      'Matching pages show title and snippet',
-    ],
-    target_repo: '/home/user/projects/docs-site',
-    output_preferences: { screenshots: true, pixel_diff: true, video: true, markdown: true },
-    status: 'review',
-    created_at: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-    build_started_at: new Date(Date.now() - 35 * 60 * 1000).toISOString(),
-    build_completed_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-    build_duration_seconds: 322,
-    rejection_feedback: null,
-    agent_plan: [
-      { step: 'Analyze navbar component structure', status: 'completed' },
-      { step: 'Create SearchInput component', status: 'completed' },
-      { step: 'Implement search index and filtering', status: 'completed' },
-      { step: 'Add keyboard navigation for results', status: 'completed' },
-    ],
-    agent_diff: `diff --git a/src/components/SearchInput.tsx b/src/components/SearchInput.tsx
-new file mode 100644
---- /dev/null
-+++ b/src/components/SearchInput.tsx
-@@ -0,0 +1,85 @@
-+import React, { useState, useMemo, useRef } from 'react';
-+import { useDebounce } from '../hooks/useDebounce';
-+import { searchPages } from '../lib/search';
-+
-+export function SearchInput() {
-+  const [query, setQuery] = useState('');
-+  const debouncedQuery = useDebounce(query, 200);
-+  const results = useMemo(() => searchPages(debouncedQuery), [debouncedQuery]);
-+  // ... component implementation
-+}
-diff --git a/src/components/Navbar.tsx b/src/components/Navbar.tsx
---- a/src/components/Navbar.tsx
-+++ b/src/components/Navbar.tsx
-@@ -8,6 +8,7 @@
-+import { SearchInput } from './SearchInput';
-@@ -15,6 +16,7 @@
-+        <SearchInput />
-diff --git a/src/lib/search.ts b/src/lib/search.ts
-new file mode 100644
---- /dev/null
-+++ b/src/lib/search.ts
-@@ -0,0 +1,32 @@
-+interface SearchResult {
-+  title: string;
-+  path: string;
-+  snippet: string;
-+}
-+
-+export function searchPages(query: string): SearchResult[] {
-+  if (!query.trim()) return [];
-+  // Search implementation
-+}
-diff --git a/src/hooks/useDebounce.ts b/src/hooks/useDebounce.ts
-new file mode 100644
---- /dev/null
-+++ b/src/hooks/useDebounce.ts
-@@ -0,0 +1,12 @@
-+import { useState, useEffect } from 'react';
-+export function useDebounce<T>(value: T, delay: number): T {
-+  const [debounced, setDebounced] = useState(value);
-+  useEffect(() => {
-+    const timer = setTimeout(() => setDebounced(value), delay);
-+    return () => clearTimeout(timer);
-+  }, [value, delay]);
-+  return debounced;
-+}
-diff --git a/src/styles/search.css b/src/styles/search.css
-new file mode 100644
---- /dev/null
-+++ b/src/styles/search.css
-@@ -0,0 +1,28 @@
-+.search-container { position: relative; }
-+.search-results { position: absolute; top: 100%; }`,
-    agent_logs: [
-      {
-        timestamp: new Date(Date.now() - 34 * 60 * 1000).toISOString(),
-        type: 'info',
-        message: 'Analyzing navbar structure and existing components...',
+        timestamp: new Date(Date.now() - 4000000).toISOString(),
+        type: "command",
+        message: "npm run test -- --run src/components/SearchBar.test.tsx",
       },
       {
-        timestamp: new Date(Date.now() - 33 * 60 * 1000).toISOString(),
-        type: 'agent_message',
-        message: 'Navbar uses flexbox layout. Adding search input between logo and nav links.',
-      },
-      {
-        timestamp: new Date(Date.now() - 32 * 60 * 1000).toISOString(),
-        type: 'file_change',
-        message: 'Created src/components/SearchInput.tsx',
-      },
-      {
-        timestamp: new Date(Date.now() - 31 * 60 * 1000).toISOString(),
-        type: 'file_change',
-        message: 'Created src/lib/search.ts',
-      },
-      {
-        timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-        type: 'command',
-        message: 'npm test -- all 12 tests passed',
+        timestamp: new Date(Date.now() - 3800000).toISOString(),
+        type: "info",
+        message: "All 12 tests passed. Build complete.",
       },
     ],
     review_result: {
       criteria_results: [
-        { criterion: 'Search input appears in navigation bar', status: 'pass', explanation: 'SearchInput component correctly integrated into Navbar with proper positioning.' },
-        { criterion: 'Results filter as user types (debounced)', status: 'pass', explanation: 'useDebounce hook implements 200ms delay. Search function filters pages by title and content.' },
-        { criterion: 'Matching pages show title and snippet', status: 'pass', explanation: 'SearchResult type includes title, path, and snippet fields. Results display correctly.' },
+        {
+          criterion: "Search input visible in navigation bar",
+          status: "pass",
+          explanation:
+            "SearchBar component is properly integrated into the NavBar component and renders an input element.",
+        },
+        {
+          criterion: "Autocomplete suggestions appear while typing",
+          status: "pass",
+          explanation:
+            "Debounced search triggers API calls and renders results in a dropdown.",
+        },
+        {
+          criterion: "Keyboard navigation works",
+          status: "pass",
+          explanation:
+            "Arrow keys navigate suggestions, Enter selects, Escape closes dropdown.",
+        },
+        {
+          criterion: "Search results page shows filtered results",
+          status: "pass",
+          explanation:
+            "Selecting a suggestion or pressing Enter navigates to /search?q=query with results.",
+        },
+        {
+          criterion: "Empty state handled gracefully",
+          status: "pass",
+          explanation:
+            'Shows "No results found" message with a suggestion to refine the search.',
+        },
       ],
-      summary: 'Feature implemented correctly. Search component is well-structured with proper debouncing and accessible keyboard navigation. Code follows existing patterns.',
-      raw_review_text: 'The implementation adds a search feature to the navigation bar...',
-      files_changed: 5,
-      risk_level: 'low',
+      summary:
+        "All acceptance criteria met. The search implementation is clean with proper debouncing, keyboard navigation, and accessibility attributes.",
+      raw_review_text:
+        "Code review passed. Implementation follows existing patterns. Good use of custom hooks for debouncing. Accessibility is handled via aria-* attributes on the combobox.",
+      files_changed: 6,
+      risk_level: "low",
     },
     outputs: {
-      before_screenshots: { '/': 'before/root.png' },
-      after_screenshots: { '/': 'after/root.png' },
-      diff_heatmaps: { '/': 'diff/root-diff.png' },
-      video_path: 'video/walkthrough.webm',
-      markdown_path: 'markdown/summary.md',
-    },
-    current_phase: null,
-    codex_thread_id: 'thread_mock_003',
-    worktree_path: '/tmp/workspaces/ticket-cb-003',
-  },
-  {
-    id: 'cb-004-done',
-    title: 'Fix mobile responsive layout',
-    description: 'The dashboard layout breaks on screens narrower than 768px. Fix the grid to stack vertically on mobile and adjust font sizes.',
-    acceptance_criteria: [
-      'Dashboard renders correctly on 375px viewport',
-      'Grid columns stack vertically on mobile',
-      'Text remains readable at all breakpoints',
-    ],
-    target_repo: '/home/user/projects/dashboard',
-    output_preferences: { screenshots: true, pixel_diff: false, video: false, markdown: true },
-    status: 'done',
-    created_at: new Date(Date.now() - 120 * 60 * 1000).toISOString(),
-    build_started_at: new Date(Date.now() - 110 * 60 * 1000).toISOString(),
-    build_completed_at: new Date(Date.now() - 98 * 60 * 1000).toISOString(),
-    build_duration_seconds: 754,
-    rejection_feedback: null,
-    agent_plan: [
-      { step: 'Audit responsive breakpoints', status: 'completed' },
-      { step: 'Fix grid layout for mobile', status: 'completed' },
-      { step: 'Adjust typography scaling', status: 'completed' },
-    ],
-    agent_diff: null,
-    agent_logs: [],
-    review_result: {
-      criteria_results: [
-        { criterion: 'Dashboard renders correctly on 375px viewport', status: 'pass', explanation: 'Verified with Playwright at 375px width.' },
-        { criterion: 'Grid columns stack vertically on mobile', status: 'pass', explanation: 'Grid switches to single column below 768px.' },
-        { criterion: 'Text remains readable at all breakpoints', status: 'pass', explanation: 'Font sizes scale appropriately.' },
-      ],
-      summary: 'All responsive issues resolved. Layout adapts correctly to mobile viewports.',
-      raw_review_text: 'The responsive layout fix addresses all reported issues...',
-      files_changed: 3,
-      risk_level: 'low',
-    },
-    outputs: {
-      before_screenshots: {},
-      after_screenshots: {},
-      diff_heatmaps: {},
+      before_screenshots: {
+        "navbar-desktop": "/outputs/TKT-003/before/navbar-desktop.png",
+      },
+      after_screenshots: {
+        "navbar-desktop": "/outputs/TKT-003/after/navbar-desktop.png",
+        "search-open": "/outputs/TKT-003/after/search-open.png",
+      },
+      diff_heatmaps: {
+        "navbar-desktop": "/outputs/TKT-003/diff/navbar-desktop.png",
+      },
       video_path: null,
-      markdown_path: 'markdown/summary.md',
+      markdown_path: "/outputs/TKT-003/summary.md",
     },
-    current_phase: null,
-    codex_thread_id: null,
-    worktree_path: null,
+    current_phase: "review",
+    codex_thread_id: "thread_def456",
+    worktree_path: "/tmp/codex/tkt-003",
   },
   {
-    id: 'cb-005-failed',
-    title: 'Add notification system',
-    description: 'Implement a real-time notification system using WebSocket connections. Show a bell icon in the header with unread count badge.',
+    id: "TKT-004",
+    title: "Fix mobile responsive layout",
+    description:
+      "Fix the dashboard layout breaking on mobile viewports (< 768px). The sidebar should collapse into a hamburger menu and cards should stack vertically.",
     acceptance_criteria: [
-      'Bell icon shows in header with unread count',
-      'Notifications dropdown opens on click',
-      'Real-time updates via WebSocket',
+      "Sidebar collapses to hamburger menu on mobile",
+      "Dashboard cards stack vertically on small screens",
+      "No horizontal scrollbar on mobile",
+      "Touch-friendly tap targets (min 44px)",
     ],
-    target_repo: '/home/user/projects/social-app',
-    output_preferences: { screenshots: true, pixel_diff: false, video: true, markdown: false },
-    status: 'failed',
-    created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
-    build_started_at: new Date(Date.now() - 55 * 60 * 1000).toISOString(),
-    build_completed_at: null,
-    build_duration_seconds: null,
+    target_repo: "acme/web-app",
+    output_preferences: {
+      screenshots: true,
+      pixel_diff: true,
+      video: false,
+      markdown: false,
+    },
+    status: "done",
+    created_at: threeHoursAgo,
+    build_started_at: twoHoursAgo,
+    build_completed_at: new Date(Date.now() - 5400000).toISOString(),
+    build_duration_seconds: 1847,
     rejection_feedback: null,
     agent_plan: [
-      { step: 'Set up WebSocket server integration', status: 'completed' },
-      { step: 'Create NotificationBell component', status: 'completed' },
-      { step: 'Implement notification dropdown', status: 'inProgress' },
+      { step: "Audit current responsive breakpoints", status: "completed" },
+      { step: "Implement collapsible sidebar", status: "completed" },
+      { step: "Fix card grid for mobile viewports", status: "completed" },
+      { step: "Verify touch target sizes", status: "completed" },
+      { step: "Test across viewport sizes", status: "completed" },
     ],
-    agent_diff: null,
+    agent_diff: `diff --git a/src/components/Sidebar.tsx b/src/components/Sidebar.tsx
+--- a/src/components/Sidebar.tsx
++++ b/src/components/Sidebar.tsx
+@@ -1,12 +1,28 @@
+-export function Sidebar() {
++import { useState } from 'react';
++import { MenuIcon, XIcon } from 'lucide-react';
++
++export function Sidebar() {
++  const [isOpen, setIsOpen] = useState(false);
++
+   return (
+-    <aside className="w-64 h-screen bg-gray-50">
++    <>
++      <button
++        className="md:hidden fixed top-4 left-4 z-50 p-2 min-w-[44px] min-h-[44px]"
++        onClick={() => setIsOpen(!isOpen)}
++      >
++        {isOpen ? <XIcon /> : <MenuIcon />}
++      </button>
++      <aside className={\`\${isOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed md:static w-64 h-screen bg-gray-50 transition-transform z-40\`}>
+         {/* sidebar content */}
+       </aside>
++    </>
+   );
+ }`,
     agent_logs: [
       {
-        timestamp: new Date(Date.now() - 54 * 60 * 1000).toISOString(),
-        type: 'error',
-        message: 'Error: Context window exceeded during notification dropdown implementation',
+        timestamp: new Date(Date.now() - 7200000).toISOString(),
+        type: "info",
+        message: "Starting build for TKT-004",
+      },
+      {
+        timestamp: new Date(Date.now() - 7000000).toISOString(),
+        type: "agent_message",
+        message: "Auditing responsive breakpoints in existing CSS...",
+      },
+      {
+        timestamp: new Date(Date.now() - 6500000).toISOString(),
+        type: "file_change",
+        message: "Modified src/components/Sidebar.tsx",
+      },
+      {
+        timestamp: new Date(Date.now() - 6000000).toISOString(),
+        type: "file_change",
+        message: "Modified src/components/Dashboard.tsx",
+      },
+      {
+        timestamp: new Date(Date.now() - 5600000).toISOString(),
+        type: "info",
+        message: "Build complete. All tests passing.",
       },
     ],
-    review_result: null,
+    review_result: {
+      criteria_results: [
+        {
+          criterion: "Sidebar collapses to hamburger menu on mobile",
+          status: "pass",
+          explanation:
+            "Sidebar uses translate-x transform with a toggle button visible on mobile.",
+        },
+        {
+          criterion: "Dashboard cards stack vertically on small screens",
+          status: "pass",
+          explanation: "Grid changes from 3-column to single-column below 768px.",
+        },
+        {
+          criterion: "No horizontal scrollbar on mobile",
+          status: "pass",
+          explanation: "overflow-x-hidden applied, all elements fit within viewport.",
+        },
+        {
+          criterion: "Touch-friendly tap targets",
+          status: "pass",
+          explanation: "All interactive elements have minimum 44px dimensions.",
+        },
+      ],
+      summary:
+        "All criteria met. Clean responsive implementation using Tailwind breakpoints.",
+      raw_review_text:
+        "Good mobile-first approach. The sidebar transition is smooth and the hamburger button is well-positioned.",
+      files_changed: 4,
+      risk_level: "low",
+    },
     outputs: {
-      before_screenshots: {},
-      after_screenshots: {},
-      diff_heatmaps: {},
+      before_screenshots: {
+        "mobile-view": "/outputs/TKT-004/before/mobile-view.png",
+        "desktop-view": "/outputs/TKT-004/before/desktop-view.png",
+      },
+      after_screenshots: {
+        "mobile-view": "/outputs/TKT-004/after/mobile-view.png",
+        "desktop-view": "/outputs/TKT-004/after/desktop-view.png",
+        "mobile-menu-open": "/outputs/TKT-004/after/mobile-menu-open.png",
+      },
+      diff_heatmaps: {
+        "mobile-view": "/outputs/TKT-004/diff/mobile-view.png",
+      },
       video_path: null,
       markdown_path: null,
     },
-    current_phase: null,
-    codex_thread_id: 'thread_mock_005',
+    current_phase: "done",
+    codex_thread_id: "thread_ghi789",
     worktree_path: null,
   },
-]
+];

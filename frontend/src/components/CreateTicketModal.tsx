@@ -1,220 +1,202 @@
-import { useState } from 'react'
-import { X, Plus, Trash2, Camera, Grid3x3, Film, FileText, Loader2 } from 'lucide-react'
-import type { CreateTicketRequest, OutputPreferences } from '../types'
+"use client";
+
+import { useState } from "react";
+import { CreateTicketRequest } from "../lib/types";
+import { X, Plus, Trash2 } from "lucide-react";
 
 interface CreateTicketModalProps {
-  open: boolean
-  onClose: () => void
-  onSubmit: (req: CreateTicketRequest) => Promise<void>
+  onClose: () => void;
+  onCreate: (data: CreateTicketRequest) => void;
 }
 
-export function CreateTicketModal({ open, onClose, onSubmit }: CreateTicketModalProps) {
-  const [title, setTitle] = useState('')
-  const [description, setDescription] = useState('')
-  const [criteria, setCriteria] = useState<string[]>([''])
-  const [targetRepo, setTargetRepo] = useState('')
-  const [outputPrefs, setOutputPrefs] = useState<OutputPreferences>({
-    screenshots: false,
-    pixel_diff: false,
-    video: false,
-    markdown: false,
-  })
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
+export function CreateTicketModal({
+  onClose,
+  onCreate,
+}: CreateTicketModalProps) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [criteria, setCriteria] = useState<string[]>([""]);
+  const [targetRepo, setTargetRepo] = useState("");
+  const [screenshots, setScreenshots] = useState(true);
+  const [pixelDiff, setPixelDiff] = useState(true);
+  const [video, setVideo] = useState(false);
+  const [markdown, setMarkdown] = useState(true);
 
-  if (!open) return null
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!title.trim() || !description.trim() || !targetRepo.trim()) return;
+    onCreate({
+      title: title.trim(),
+      description: description.trim(),
+      acceptance_criteria: criteria.filter((c) => c.trim()),
+      target_repo: targetRepo.trim(),
+      output_preferences: {
+        screenshots,
+        pixel_diff: pixelDiff,
+        video,
+        markdown,
+      },
+    });
+  };
 
-  const isValid = title.trim() && description.trim() && targetRepo.trim() &&
-    criteria.some(c => c.trim())
-
-  const handleSubmit = async () => {
-    if (!isValid) return
-    setSubmitting(true)
-    setError('')
-    try {
-      await onSubmit({
-        title: title.trim(),
-        description: description.trim(),
-        acceptance_criteria: criteria.filter(c => c.trim()),
-        target_repo: targetRepo.trim(),
-        output_preferences: outputPrefs,
-      })
-      // Reset
-      setTitle('')
-      setDescription('')
-      setCriteria([''])
-      setTargetRepo('')
-      setOutputPrefs({ screenshots: false, pixel_diff: false, video: false, markdown: false })
-      onClose()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create ticket')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const addCriterion = () => setCriteria([...criteria, ''])
-  const removeCriterion = (i: number) => setCriteria(criteria.filter((_, idx) => idx !== i))
-  const updateCriterion = (i: number, val: string) => {
-    const copy = [...criteria]
-    copy[i] = val
-    setCriteria(copy)
-  }
-
-  const outputOptions = [
-    { key: 'screenshots' as const, icon: Camera, label: 'Before/After screenshots' },
-    { key: 'pixel_diff' as const, icon: Grid3x3, label: 'Pixel diff heatmap' },
-    { key: 'video' as const, icon: Film, label: 'Video walkthrough' },
-    { key: 'markdown' as const, icon: FileText, label: 'Markdown summary' },
-  ]
+  const addCriterion = () => setCriteria([...criteria, ""]);
+  const removeCriterion = (i: number) =>
+    setCriteria(criteria.filter((_, idx) => idx !== i));
+  const updateCriterion = (i: number, val: string) =>
+    setCriteria(criteria.map((c, idx) => (idx === i ? val : c)));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
-      {/* Overlay */}
-      <div className="absolute inset-0 bg-[var(--color-overlay)]" />
-
-      {/* Modal */}
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in"
+      onClick={onClose}
+    >
       <div
-        className="relative bg-[var(--color-surface)] rounded-xl shadow-2xl w-full max-w-[520px] max-h-[90vh] overflow-y-auto animate-scale-in"
-        onClick={e => e.stopPropagation()}
+        className="bg-card-bg rounded-xl w-full max-w-[520px] max-h-[85vh] overflow-y-auto animate-modal"
+        style={{ boxShadow: "var(--shadow-modal)" }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 pt-6 pb-4">
-          <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
-            Create Ticket
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border-divider">
+          <h2 className="text-[15px] font-semibold text-text-primary tracking-[-0.02em]">
+            New ticket
           </h2>
           <button
             onClick={onClose}
-            className="p-1 rounded-md hover:bg-[var(--color-surface-hover)] transition-colors text-[var(--color-text-muted)]"
+            className="p-1.5 rounded-lg hover:bg-[var(--status-todo-bg)] text-text-muted hover:text-text-secondary transition-all duration-100"
           >
-            <X size={18} />
+            <X size={16} strokeWidth={2} />
           </button>
         </div>
 
-        <div className="px-6 pb-6 space-y-5">
-          {/* Title */}
-          <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[var(--color-text-primary)]">Title</label>
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          <div>
+            <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-[0.06em] mb-1.5">
+              Title
+            </label>
             <input
               type="text"
               value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="What needs to be built?"
-              className="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg focus:outline-none focus:border-[var(--color-border-focus)] focus:ring-1 focus:ring-[var(--color-border-focus)] bg-[var(--color-surface)] transition-colors"
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="What should be built?"
+              className="w-full px-3.5 py-2.5 text-[13px] border border-border-input rounded-lg bg-card-bg text-text-primary placeholder:text-text-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-[var(--accent-bg)] transition-all"
+              autoFocus
             />
           </div>
 
-          {/* Description */}
-          <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[var(--color-text-primary)]">Description</label>
+          <div>
+            <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-[0.06em] mb-1.5">
+              Description
+            </label>
             <textarea
               value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Describe the feature in detail. Mention relevant routes (e.g. /settings) for screenshots."
+              onChange={(e) => setDescription(e.target.value)}
               rows={3}
-              className="w-full px-3 py-2 text-sm border border-[var(--color-border)] rounded-lg focus:outline-none focus:border-[var(--color-border-focus)] focus:ring-1 focus:ring-[var(--color-border-focus)] bg-[var(--color-surface)] resize-none transition-colors"
+              placeholder="Describe the task in detail..."
+              className="w-full px-3.5 py-2.5 text-[13px] border border-border-input rounded-lg bg-card-bg text-text-primary placeholder:text-text-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-[var(--accent-bg)] transition-all resize-none"
             />
           </div>
 
-          {/* Acceptance Criteria */}
-          <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[var(--color-text-primary)]">
-              Acceptance Criteria
+          <div>
+            <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-[0.06em] mb-1.5">
+              Target repository
+            </label>
+            <input
+              type="text"
+              value={targetRepo}
+              onChange={(e) => setTargetRepo(e.target.value)}
+              placeholder="owner/repo"
+              className="w-full px-3.5 py-2.5 text-[13px] border border-border-input rounded-lg bg-card-bg text-text-primary placeholder:text-text-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-[var(--accent-bg)] transition-all font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-[0.06em] mb-1.5">
+              Acceptance criteria
             </label>
             <div className="space-y-2">
               {criteria.map((c, i) => (
                 <div key={i} className="flex items-center gap-2">
-                  <span className="text-[11px] text-[var(--color-text-muted)] w-4 text-right shrink-0">{i + 1}.</span>
+                  <div className="flex items-center justify-center w-5 h-5 text-[10px] font-semibold text-text-faint">
+                    {i + 1}.
+                  </div>
                   <input
                     type="text"
                     value={c}
-                    onChange={e => updateCriterion(i, e.target.value)}
-                    placeholder="Describe a requirement..."
-                    className="flex-1 px-3 py-1.5 text-sm border border-[var(--color-border)] rounded-lg focus:outline-none focus:border-[var(--color-border-focus)] focus:ring-1 focus:ring-[var(--color-border-focus)] bg-[var(--color-surface)] transition-colors"
+                    onChange={(e) => updateCriterion(i, e.target.value)}
+                    placeholder={`Criterion ${i + 1}`}
+                    className="flex-1 px-3 py-2 text-[13px] border border-border-input rounded-lg bg-card-bg text-text-primary placeholder:text-text-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-[var(--accent-bg)] transition-all"
                   />
                   {criteria.length > 1 && (
                     <button
+                      type="button"
                       onClick={() => removeCriterion(i)}
-                      className="p-1 rounded-md hover:bg-[var(--color-danger-light)] text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors"
+                      className="p-1.5 text-text-faint hover:text-[var(--status-failed)] transition-colors rounded-md hover:bg-[var(--status-failed-bg)]"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={13} />
                     </button>
                   )}
                 </div>
               ))}
             </div>
             <button
+              type="button"
               onClick={addCriterion}
-              className="flex items-center gap-1 text-xs text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] transition-colors mt-1"
+              className="mt-2 flex items-center gap-1.5 text-[12px] font-medium text-accent hover:text-accent-hover transition-colors"
             >
-              <Plus size={13} /> Add criterion
+              <Plus size={12} strokeWidth={2.5} /> Add criterion
             </button>
           </div>
 
-          {/* Target Repo */}
-          <div className="space-y-1.5">
-            <label className="text-[13px] font-medium text-[var(--color-text-primary)]">Target Repository</label>
-            <input
-              type="text"
-              value={targetRepo}
-              onChange={e => setTargetRepo(e.target.value)}
-              placeholder="/path/to/your/project"
-              className="w-full px-3 py-2 text-sm font-mono border border-[var(--color-border)] rounded-lg focus:outline-none focus:border-[var(--color-border-focus)] focus:ring-1 focus:ring-[var(--color-border-focus)] bg-[var(--color-surface)] transition-colors"
-            />
-          </div>
-
-          {/* Output Preferences */}
-          <div className="space-y-2">
-            <label className="text-[13px] font-medium text-[var(--color-text-primary)]">Output Preferences</label>
-            <div className="grid grid-cols-2 gap-2">
-              {outputOptions.map(opt => (
+          <div>
+            <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-[0.06em] mb-2">
+              Output preferences
+            </label>
+            <div className="flex flex-wrap gap-4">
+              {[
+                { label: "Screenshots", val: screenshots, set: setScreenshots },
+                { label: "Pixel diff", val: pixelDiff, set: setPixelDiff },
+                { label: "Video", val: video, set: setVideo },
+                { label: "Markdown", val: markdown, set: setMarkdown },
+              ].map(({ label, val, set }) => (
                 <label
-                  key={opt.key}
-                  className={`flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer transition-colors text-xs ${
-                    outputPrefs[opt.key]
-                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-light)] text-[var(--color-accent-text)]'
-                      : 'border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-text-muted)]'
-                  }`}
+                  key={label}
+                  className="flex items-center gap-2 text-[12px] text-text-secondary cursor-pointer select-none"
                 >
                   <input
                     type="checkbox"
-                    checked={outputPrefs[opt.key]}
-                    onChange={e => setOutputPrefs({ ...outputPrefs, [opt.key]: e.target.checked })}
-                    className="sr-only"
+                    checked={val}
+                    onChange={(e) => set(e.target.checked)}
+                    className="rounded border-border-input accent-[var(--accent)] w-3.5 h-3.5"
                   />
-                  <opt.icon size={14} />
-                  {opt.label}
+                  {label}
                 </label>
               ))}
             </div>
           </div>
 
-          {/* Error */}
-          {error && (
-            <div className="text-xs text-[var(--color-danger)] bg-[var(--color-danger-light)] p-2 rounded-md">
-              {error}
-            </div>
-          )}
-
           {/* Actions */}
-          <div className="flex gap-3 pt-2">
+          <div className="flex justify-end gap-2 pt-1 border-t border-border-divider">
             <button
+              type="button"
               onClick={onClose}
-              className="flex-1 py-2 rounded-lg text-sm text-[var(--color-text-secondary)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] transition-colors"
+              className="px-4 py-2 text-[13px] text-text-secondary font-medium border border-border-card rounded-lg hover:bg-[var(--status-todo-bg)] transition-all"
             >
               Cancel
             </button>
             <button
-              disabled={!isValid || submitting}
-              onClick={handleSubmit}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-50"
+              type="submit"
+              disabled={
+                !title.trim() || !description.trim() || !targetRepo.trim()
+              }
+              className="px-4 py-2 text-[13px] font-medium text-white rounded-lg transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.98]"
+              style={{ background: "var(--accent)" }}
             >
-              {submitting ? <Loader2 size={14} className="animate-spin" /> : null}
-              Create Ticket
+              Create ticket
             </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
-  )
+  );
 }

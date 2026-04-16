@@ -1,62 +1,77 @@
-import { CheckCircle2, Circle, Loader2 } from 'lucide-react'
-import type { PlanStep } from '../types'
+"use client";
 
-interface PlanProgressProps {
-  plan: PlanStep[]
-  compact?: boolean
-}
+import { PlanStep } from "../lib/types";
+import { Check, Circle, Loader2 } from "lucide-react";
 
-export function PlanProgress({ plan, compact = false }: PlanProgressProps) {
-  if (!plan || plan.length === 0) return null
+export function PlanProgress({ steps }: { steps: PlanStep[] }) {
+  if (!steps || steps.length === 0) {
+    return (
+      <div className="text-[13px] text-text-muted py-4 text-center">
+        No plan available yet
+      </div>
+    );
+  }
 
-  const completed = plan.filter(s => s.status === 'completed').length
-  const pct = Math.round((completed / plan.length) * 100)
+  const completed = steps.filter((s) => s.status === "completed").length;
 
   return (
-    <div className="space-y-1.5">
-      {plan.map((step, i) => (
-        <div
-          key={i}
-          className={`flex items-start gap-2 ${compact ? 'text-xs' : 'text-[13px]'} animate-fade-in`}
-          style={{ animationDelay: `${i * 40}ms` }}
-        >
-          <span className="mt-0.5 shrink-0">
-            {step.status === 'completed' && (
-              <CheckCircle2 size={compact ? 13 : 15} className="text-[var(--color-success)]" />
-            )}
-            {step.status === 'inProgress' && (
-              <Loader2 size={compact ? 13 : 15} className="text-[var(--color-warning)] animate-spin-slow" />
-            )}
-            {step.status === 'pending' && (
-              <Circle size={compact ? 13 : 15} className="text-[var(--color-text-muted)]" />
-            )}
-          </span>
-          <span
-            className={
-              step.status === 'completed'
-                ? 'text-[var(--color-text-secondary)] line-through decoration-[var(--color-border)]'
-                : step.status === 'inProgress'
-                  ? 'text-[var(--color-text-primary)] font-medium'
-                  : 'text-[var(--color-text-muted)]'
-            }
-          >
-            {step.step}
-          </span>
-        </div>
-      ))}
-
+    <div>
       {/* Progress bar */}
-      <div className="mt-2 flex items-center gap-2">
-        <div className="flex-1 h-1.5 bg-[var(--color-border-light)] rounded-full overflow-hidden">
+      <div className="flex items-center gap-2 mb-3">
+        <div className="flex-1 h-1 bg-border-divider rounded-full overflow-hidden">
           <div
-            className="h-full bg-[var(--color-warning)] rounded-full transition-all duration-500 ease-out"
-            style={{ width: `${pct}%` }}
+            className="h-full rounded-full transition-all duration-500"
+            style={{
+              width: `${(completed / steps.length) * 100}%`,
+              background: "var(--accent)",
+            }}
           />
         </div>
-        <span className="text-[11px] font-mono text-[var(--color-text-muted)] tabular-nums">
-          {pct}%
+        <span className="text-[11px] text-text-muted tabular-nums">
+          {completed}/{steps.length}
         </span>
       </div>
+
+      {/* Steps */}
+      <div className="space-y-0.5">
+        {steps.map((step, i) => (
+          <div key={i} className="flex items-start gap-2 py-1.5 px-2 rounded">
+            <div className="mt-0.5 flex-shrink-0">
+              {step.status === "completed" ? (
+                <div
+                  className="w-4 h-4 rounded-full flex items-center justify-center"
+                  style={{ background: "var(--status-done-bg)" }}
+                >
+                  <Check
+                    size={10}
+                    style={{ color: "var(--status-done)" }}
+                    strokeWidth={2.5}
+                  />
+                </div>
+              ) : step.status === "inProgress" ? (
+                <Loader2
+                  size={16}
+                  className="animate-spin"
+                  style={{ color: "var(--status-in-progress)" }}
+                />
+              ) : (
+                <Circle size={16} style={{ color: "var(--border-card)" }} />
+              )}
+            </div>
+            <span
+              className={`text-[13px] leading-snug ${
+                step.status === "completed"
+                  ? "text-text-muted line-through"
+                  : step.status === "inProgress"
+                    ? "text-text-primary font-medium"
+                    : "text-text-secondary"
+              }`}
+            >
+              {step.step}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
-  )
+  );
 }

@@ -1,280 +1,370 @@
-import { useState } from 'react'
+"use client";
+
+import { useState } from "react";
+import { Ticket } from "../lib/types";
+import { StatusIcon } from "./StatusIcon";
+import { PlanProgress } from "./PlanProgress";
+import { DiffSummary } from "./DiffSummary";
+import { ReviewResults } from "./ReviewResults";
+import { AgentLogFeed } from "./AgentLogFeed";
+import { ScreenshotViewer } from "./ScreenshotViewer";
+import { VideoPlayer } from "./VideoPlayer";
+import { MarkdownViewer } from "./MarkdownViewer";
+import { STATUS_CONFIG, formatDuration, formatRelativeTime } from "../lib/utils";
 import {
-  X, Check, RotateCcw, Clock, CheckCircle2, AlertTriangle, Loader2,
-  FileCode2, MessageSquare, Camera, Film, FileText
-} from 'lucide-react'
-import type { Ticket } from '../types'
-import { formatDuration, relativeTime, statusLabel, statusColor } from '../lib/utils'
-import { PlanProgress } from './PlanProgress'
-import { DiffSummary } from './DiffSummary'
-import { ReviewResults } from './ReviewResults'
-import { AgentLogFeed } from './AgentLogFeed'
-import { ScreenshotViewer } from './ScreenshotViewer'
-import { VideoPlayer } from './VideoPlayer'
-import { MarkdownViewer } from './MarkdownViewer'
+  X,
+  Play,
+  Check,
+  XCircle,
+  Clock,
+  GitBranch,
+  ExternalLink,
+} from "lucide-react";
 
 interface TicketDetailModalProps {
-  ticket: Ticket | null
-  onClose: () => void
-  onApprove: (id: string) => void
-  onReject: (id: string, feedback: string) => void
-  onStartBuild: (id: string) => void
+  ticket: Ticket;
+  onClose: () => void;
+  onStartBuild?: () => void;
+  onApprove?: () => void;
+  onReject?: (feedback: string) => void;
 }
 
-type Tab = 'overview' | 'logs' | 'diff' | 'outputs'
+type Tab = "overview" | "plan" | "diff" | "review" | "logs" | "outputs";
 
-export function TicketDetailModal({ ticket, onClose, onApprove, onReject, onStartBuild }: TicketDetailModalProps) {
-  const [activeTab, setActiveTab] = useState<Tab>('overview')
-  const [rejectMode, setRejectMode] = useState(false)
-  const [feedback, setFeedback] = useState('')
-  const [loading, setLoading] = useState(false)
+export function TicketDetailModal({
+  ticket,
+  onClose,
+  onStartBuild,
+  onApprove,
+  onReject,
+}: TicketDetailModalProps) {
+  const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [rejectFeedback, setRejectFeedback] = useState("");
+  const [showRejectInput, setShowRejectInput] = useState(false);
 
-  if (!ticket) return null
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "overview", label: "Overview" },
+    { id: "plan", label: "Plan" },
+    { id: "diff", label: "Diff" },
+    { id: "review", label: "Review" },
+    { id: "logs", label: "Logs" },
+    { id: "outputs", label: "Outputs" },
+  ];
 
-  const tabs: { key: Tab; label: string; icon: typeof MessageSquare; show: boolean }[] = [
-    { key: 'overview', label: 'Overview', icon: CheckCircle2, show: true },
-    { key: 'logs', label: 'Activity', icon: MessageSquare, show: ticket.agent_logs.length > 0 },
-    { key: 'diff', label: 'Changes', icon: FileCode2, show: !!ticket.agent_diff },
-    { key: 'outputs', label: 'Outputs', icon: Camera, show: !!(ticket.outputs.video_path || ticket.outputs.markdown_path || Object.keys(ticket.outputs.before_screenshots).length > 0 || Object.keys(ticket.outputs.after_screenshots).length > 0) },
-  ]
-
-  const handleAction = async (action: () => Promise<void> | void) => {
-    setLoading(true)
-    try { await action() } finally { setLoading(false) }
-  }
-
-  const hasOutputs = Object.keys(ticket.outputs.before_screenshots).length > 0 ||
-    Object.keys(ticket.outputs.after_screenshots).length > 0
+  const config = STATUS_CONFIG[ticket.status];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-[var(--color-overlay)]" />
-
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop animate-fade-in"
+      onClick={onClose}
+    >
       <div
-        className="relative bg-[var(--color-surface)] rounded-xl shadow-2xl w-full max-w-[720px] max-h-[85vh] flex flex-col animate-scale-in"
-        onClick={e => e.stopPropagation()}
+        className="bg-card-bg rounded-xl w-full max-w-[680px] max-h-[85vh] flex flex-col animate-modal"
+        style={{ boxShadow: "var(--shadow-modal)" }}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between px-6 pt-6 pb-3 border-b border-[var(--color-border-light)]">
-          <div className="space-y-1 flex-1 mr-4">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-mono text-[var(--color-text-muted)]">{ticket.id.slice(0, 8)}</span>
-              <span
-                className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
-                style={{ backgroundColor: statusColor(ticket.status) + '18', color: statusColor(ticket.status) }}
-              >
-                {statusLabel(ticket.status)}
+        <div className="flex items-start justify-between px-6 py-5 border-b border-border-divider flex-shrink-0">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[11px] font-medium text-text-muted font-mono tracking-wide">
+                {ticket.id}
               </span>
+              <div
+                className="flex items-center gap-1.5 px-2 py-[2px] rounded-full text-[10px] font-semibold uppercase tracking-wide"
+                style={{
+                  background:
+                    ticket.status === "todo"
+                      ? "var(--status-todo-bg)"
+                      : ticket.status === "in_progress"
+                        ? "var(--status-in-progress-bg)"
+                        : ticket.status === "review"
+                          ? "var(--status-review-bg)"
+                          : ticket.status === "done"
+                            ? "var(--status-done-bg)"
+                            : "var(--status-failed-bg)",
+                  color: config.color,
+                }}
+              >
+                <StatusIcon status={ticket.status} size={11} />
+                {config.label}
+              </div>
             </div>
-            <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">{ticket.title}</h2>
-            <p className="text-[13px] text-[var(--color-text-secondary)] leading-relaxed">{ticket.description}</p>
+            <h2 className="text-[16px] font-semibold text-text-primary leading-snug tracking-[-0.02em]">
+              {ticket.title}
+            </h2>
+            <div className="flex items-center gap-3 mt-2 text-[11px] text-text-muted">
+              <span className="inline-flex items-center gap-1">
+                <GitBranch size={11} strokeWidth={2} />
+                {ticket.target_repo}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Clock size={11} strokeWidth={2} />
+                {formatRelativeTime(ticket.created_at)}
+              </span>
+              {ticket.build_duration_seconds !== null && (
+                <span>
+                  Built in {formatDuration(ticket.build_duration_seconds)}
+                </span>
+              )}
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-md hover:bg-[var(--color-surface-hover)] transition-colors text-[var(--color-text-muted)] shrink-0"
+            className="p-1.5 rounded-lg hover:bg-[var(--status-todo-bg)] text-text-muted hover:text-text-secondary transition-all duration-100 ml-3 flex-shrink-0"
           >
-            <X size={18} />
+            <X size={16} strokeWidth={2} />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-0 px-6 border-b border-[var(--color-border-light)]">
-          {tabs.filter(t => t.show).map(tab => (
+        <div className="flex items-center gap-0 px-6 border-b border-border-divider flex-shrink-0">
+          {tabs.map((tab) => (
             <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 transition-colors ${
-                activeTab === tab.key
-                  ? 'border-[var(--color-accent)] text-[var(--color-accent)]'
-                  : 'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`relative px-3 py-2.5 text-[12px] font-medium transition-colors duration-100 ${
+                activeTab === tab.id
+                  ? "text-text-primary"
+                  : "text-text-muted hover:text-text-secondary"
               }`}
             >
-              <tab.icon size={13} />
               {tab.label}
+              {activeTab === tab.id && (
+                <div
+                  className="absolute bottom-0 left-3 right-3 h-[2px] rounded-full"
+                  style={{ background: "var(--accent)" }}
+                />
+              )}
             </button>
           ))}
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-          {/* Overview tab */}
-          {activeTab === 'overview' && (
-            <>
-              {/* Meta */}
-              <div className="flex items-center gap-4 text-xs text-[var(--color-text-muted)]">
-                <span>Created {relativeTime(ticket.created_at)}</span>
-                {ticket.build_duration_seconds && (
-                  <span className="flex items-center gap-1">
-                    <Clock size={11} />
-                    Built in {formatDuration(ticket.build_duration_seconds)}
-                  </span>
-                )}
-                {ticket.target_repo && (
-                  <span className="font-mono">{ticket.target_repo}</span>
-                )}
+        <div className="flex-1 overflow-y-auto p-6">
+          {activeTab === "overview" && (
+            <div className="space-y-5">
+              <div>
+                <h3 className="text-[11px] font-semibold text-text-muted uppercase tracking-[0.06em] mb-2">
+                  Description
+                </h3>
+                <p className="text-[13px] text-text-secondary leading-[1.65]">
+                  {ticket.description}
+                </p>
               </div>
 
-              {/* Acceptance Criteria */}
-              <div className="space-y-2">
-                <h3 className="text-[13px] font-semibold text-[var(--color-text-primary)]">Acceptance Criteria</h3>
-                {ticket.review_result ? (
-                  <ReviewResults result={ticket.review_result} />
-                ) : (
-                  <ul className="space-y-1">
-                    {ticket.acceptance_criteria.map((c, i) => (
-                      <li key={i} className="flex items-start gap-2 text-[13px] text-[var(--color-text-secondary)]">
-                        <span className="text-[var(--color-text-muted)] shrink-0">{i + 1}.</span>
-                        {c}
+              <div>
+                <h3 className="text-[11px] font-semibold text-text-muted uppercase tracking-[0.06em] mb-2">
+                  Acceptance criteria
+                </h3>
+                <ul className="space-y-1.5">
+                  {ticket.acceptance_criteria.map((c, i) => {
+                    const reviewCrit =
+                      ticket.review_result?.criteria_results[i];
+                    return (
+                      <li
+                        key={i}
+                        className="flex items-start gap-2.5 text-[13px] py-1"
+                      >
+                        <span className="mt-0.5 flex-shrink-0">
+                          {reviewCrit?.status === "pass" ? (
+                            <Check
+                              size={14}
+                              strokeWidth={2.5}
+                              style={{ color: "var(--status-done)" }}
+                            />
+                          ) : reviewCrit?.status === "fail" ? (
+                            <XCircle
+                              size={14}
+                              strokeWidth={2}
+                              style={{ color: "var(--status-failed)" }}
+                            />
+                          ) : (
+                            <div
+                              className="w-3.5 h-3.5 rounded-full border-[1.5px]"
+                              style={{ borderColor: "var(--border-card)" }}
+                            />
+                          )}
+                        </span>
+                        <span className="text-text-secondary leading-[1.4]">
+                          {c}
+                        </span>
                       </li>
-                    ))}
-                  </ul>
-                )}
+                    );
+                  })}
+                </ul>
               </div>
 
-              {/* Plan */}
-              {ticket.agent_plan && (
-                <div className="space-y-2">
-                  <h3 className="text-[13px] font-semibold text-[var(--color-text-primary)]">Build Plan</h3>
-                  <PlanProgress plan={ticket.agent_plan} />
-                </div>
-              )}
-
-              {/* Review summary */}
-              {ticket.review_result && (
-                <div className="space-y-2">
-                  <h3 className="text-[13px] font-semibold text-[var(--color-text-primary)]">Review Summary</h3>
-                  <p className="text-[13px] text-[var(--color-text-secondary)] leading-relaxed">
-                    {ticket.review_result.summary}
-                  </p>
-                </div>
-              )}
-
-              {/* Rejection feedback */}
               {ticket.rejection_feedback && (
-                <div className="space-y-1">
-                  <h3 className="text-[13px] font-semibold text-[var(--color-danger)]">Previous Rejection Feedback</h3>
-                  <p className="text-[13px] text-[var(--color-text-secondary)] bg-[var(--color-danger-light)] p-3 rounded-lg">
+                <div
+                  className="p-3.5 rounded-lg border"
+                  style={{
+                    borderColor: "var(--status-failed)",
+                    background: "var(--status-failed-bg)",
+                  }}
+                >
+                  <h3
+                    className="text-[11px] font-semibold uppercase tracking-[0.06em] mb-1"
+                    style={{ color: "var(--status-failed)" }}
+                  >
+                    Rejection feedback
+                  </h3>
+                  <p className="text-[13px] text-text-secondary leading-[1.5]">
                     {ticket.rejection_feedback}
                   </p>
                 </div>
               )}
-            </>
-          )}
 
-          {/* Logs tab */}
-          {activeTab === 'logs' && (
-            <AgentLogFeed logs={ticket.agent_logs} maxHeight={500} />
-          )}
-
-          {/* Diff tab */}
-          {activeTab === 'diff' && (
-            <div className="space-y-3">
-              <DiffSummary diff={ticket.agent_diff} />
-              {ticket.agent_diff && (
-                <pre className="text-[11px] font-mono leading-relaxed bg-[var(--color-surface-active)] border border-[var(--color-border-light)] rounded-lg p-4 overflow-x-auto whitespace-pre max-h-[500px] overflow-y-auto">
-                  {ticket.agent_diff}
-                </pre>
+              {(ticket.codex_thread_id || ticket.current_phase) && (
+                <div className="grid grid-cols-2 gap-3">
+                  {ticket.codex_thread_id && (
+                    <div className="p-3 rounded-lg bg-[var(--accent-subtle)] border border-border-divider">
+                      <div className="text-[10px] text-text-muted uppercase tracking-[0.06em] font-semibold mb-1">
+                        Thread ID
+                      </div>
+                      <div className="text-[12px] font-mono text-text-secondary flex items-center gap-1.5">
+                        {ticket.codex_thread_id}
+                        <ExternalLink
+                          size={10}
+                          className="text-text-faint"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {ticket.current_phase && (
+                    <div className="p-3 rounded-lg bg-[var(--accent-subtle)] border border-border-divider">
+                      <div className="text-[10px] text-text-muted uppercase tracking-[0.06em] font-semibold mb-1">
+                        Current Phase
+                      </div>
+                      <div className="text-[12px] font-medium text-text-secondary capitalize">
+                        {ticket.current_phase}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
 
-          {/* Outputs tab */}
-          {activeTab === 'outputs' && (
+          {activeTab === "plan" && (
+            <PlanProgress steps={ticket.agent_plan || []} />
+          )}
+          {activeTab === "diff" && <DiffSummary diff={ticket.agent_diff} />}
+          {activeTab === "review" && (
+            <ReviewResults review={ticket.review_result} />
+          )}
+          {activeTab === "logs" && <AgentLogFeed logs={ticket.agent_logs} />}
+          {activeTab === "outputs" && (
             <div className="space-y-6">
-              {hasOutputs && (
-                <div className="space-y-2">
-                  <h3 className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text-primary)]">
-                    <Camera size={14} /> Screenshots
-                  </h3>
-                  <ScreenshotViewer
-                    before={ticket.outputs.before_screenshots}
-                    after={ticket.outputs.after_screenshots}
-                    diffs={ticket.outputs.diff_heatmaps}
-                    ticketId={ticket.id}
-                  />
-                </div>
-              )}
+              <ScreenshotViewer outputs={ticket.outputs} />
               {ticket.outputs.video_path && (
-                <div className="space-y-2">
-                  <h3 className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text-primary)]">
-                    <Film size={14} /> Video Walkthrough
-                  </h3>
-                  <VideoPlayer src={ticket.outputs.video_path} ticketId={ticket.id} />
-                </div>
+                <VideoPlayer videoPath={ticket.outputs.video_path} />
               )}
               {ticket.outputs.markdown_path && (
-                <div className="space-y-2">
-                  <h3 className="flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-text-primary)]">
-                    <FileText size={14} /> Summary
-                  </h3>
-                  <MarkdownViewer src={ticket.outputs.markdown_path} ticketId={ticket.id} />
-                </div>
+                <MarkdownViewer path={ticket.outputs.markdown_path} />
               )}
             </div>
           )}
         </div>
 
-        {/* Footer actions */}
-        {(ticket.status === 'review' || ticket.status === 'todo' || ticket.status === 'failed') && (
-          <div className="border-t border-[var(--color-border-light)] px-6 py-4">
-            {ticket.status === 'review' && !rejectMode && (
-              <div className="flex gap-3">
-                <button
-                  disabled={loading}
-                  onClick={() => handleAction(() => onApprove(ticket.id))}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium bg-[var(--color-success)] text-white hover:opacity-90 transition-opacity disabled:opacity-50"
-                >
-                  {loading ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                  Approve
-                </button>
-                <button
-                  onClick={() => setRejectMode(true)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium border border-[var(--color-danger)] text-[var(--color-danger)] hover:bg-[var(--color-danger-light)] transition-colors"
-                >
-                  <X size={14} /> Reject
-                </button>
-              </div>
-            )}
-            {ticket.status === 'review' && rejectMode && (
-              <div className="space-y-3">
-                <textarea
-                  value={feedback}
-                  onChange={e => setFeedback(e.target.value)}
-                  placeholder="What needs to be fixed?"
-                  className="w-full text-sm p-3 border border-[var(--color-border)] rounded-lg resize-none focus:outline-none focus:border-[var(--color-border-focus)] bg-[var(--color-surface)]"
-                  rows={3}
-                  autoFocus
-                />
-                <div className="flex gap-3">
-                  <button
-                    disabled={!feedback.trim() || loading}
-                    onClick={() => handleAction(async () => { onReject(ticket.id, feedback); setRejectMode(false); setFeedback('') })}
-                    className="flex-1 py-2 rounded-lg text-sm font-medium bg-[var(--color-danger)] text-white hover:opacity-90 transition-opacity disabled:opacity-50"
-                  >
-                    {loading ? <Loader2 size={14} className="animate-spin" /> : 'Submit Rejection'}
-                  </button>
-                  <button
-                    onClick={() => { setRejectMode(false); setFeedback('') }}
-                    className="px-4 py-2 rounded-lg text-sm text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] transition-colors"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            )}
-            {(ticket.status === 'todo' || ticket.status === 'failed') && (
+        {/* Action bar */}
+        {(ticket.status === "todo" ||
+          ticket.status === "review" ||
+          ticket.status === "failed") && (
+          <div className="flex items-center justify-end gap-2 px-6 py-3.5 border-t border-border-divider flex-shrink-0">
+            {ticket.status === "todo" && onStartBuild && (
               <button
-                disabled={loading}
-                onClick={() => handleAction(() => onStartBuild(ticket.id))}
-                className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent-hover)] transition-colors disabled:opacity-50"
+                onClick={onStartBuild}
+                className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium text-white rounded-lg transition-all duration-150 hover:brightness-110 active:scale-[0.98]"
+                style={{ background: "var(--accent)" }}
               >
-                {loading ? <Loader2 size={14} className="animate-spin" /> : ticket.status === 'failed' ? <RotateCcw size={14} /> : <AlertTriangle size={14} />}
-                {ticket.status === 'failed' ? 'Retry Build' : 'Start Build'}
+                <Play size={13} fill="white" />
+                Start build
               </button>
+            )}
+
+            {ticket.status === "failed" && onStartBuild && (
+              <button
+                onClick={onStartBuild}
+                className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium text-white rounded-lg transition-all duration-150 hover:brightness-110 active:scale-[0.98]"
+                style={{ background: "var(--accent)" }}
+              >
+                <Play size={13} fill="white" />
+                Retry build
+              </button>
+            )}
+
+            {ticket.status === "review" && (
+              <>
+                {showRejectInput ? (
+                  <div className="flex items-center gap-2 flex-1">
+                    <input
+                      type="text"
+                      value={rejectFeedback}
+                      onChange={(e) => setRejectFeedback(e.target.value)}
+                      placeholder="Rejection reason..."
+                      className="flex-1 px-3 py-2 text-[13px] border border-border-input rounded-lg bg-card-bg text-text-primary placeholder:text-text-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (
+                          e.key === "Enter" &&
+                          rejectFeedback.trim() &&
+                          onReject
+                        ) {
+                          onReject(rejectFeedback.trim());
+                          setShowRejectInput(false);
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        if (rejectFeedback.trim() && onReject) {
+                          onReject(rejectFeedback.trim());
+                          setShowRejectInput(false);
+                        }
+                      }}
+                      disabled={!rejectFeedback.trim()}
+                      className="px-4 py-2 text-[13px] font-medium text-white rounded-lg transition-all duration-150 disabled:opacity-40 hover:brightness-110"
+                      style={{ background: "var(--status-failed)" }}
+                    >
+                      Reject
+                    </button>
+                    <button
+                      onClick={() => setShowRejectInput(false)}
+                      className="px-3 py-2 text-[13px] text-text-secondary border border-border-card rounded-lg hover:bg-[var(--status-todo-bg)] transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setShowRejectInput(true)}
+                      className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium rounded-lg border transition-all duration-150 hover:brightness-95"
+                      style={{
+                        borderColor: "var(--status-failed)",
+                        color: "var(--status-failed)",
+                        background: "var(--status-failed-bg)",
+                      }}
+                    >
+                      <XCircle size={13} />
+                      Reject
+                    </button>
+                    <button
+                      onClick={onApprove}
+                      className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium text-white rounded-lg transition-all duration-150 hover:brightness-110 active:scale-[0.98]"
+                      style={{ background: "var(--status-done)" }}
+                    >
+                      <Check size={13} strokeWidth={2.5} />
+                      Approve
+                    </button>
+                  </>
+                )}
+              </>
             )}
           </div>
         )}
       </div>
     </div>
-  )
+  );
 }
