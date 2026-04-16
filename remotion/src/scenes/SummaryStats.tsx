@@ -7,92 +7,60 @@ import {
 } from 'remotion';
 
 interface SummaryStatsProps {
-  filesChanged: number;
   buildDuration: string;
+  pagesAffected: number;
+  completionRate: number;
   riskLevel: string;
 }
 
-const cardStyle = {
-  flex: 1,
-  minHeight: 360,
-  borderRadius: 34,
-  padding: '38px 40px',
-  background:
-    'linear-gradient(180deg, rgba(30,41,59,0.82), rgba(15,23,42,0.96))',
-  border: '1px solid rgba(148,163,184,0.16)',
-  boxShadow: '0 22px 64px rgba(15, 23, 42, 0.32)',
-  display: 'flex',
-  flexDirection: 'column' as const,
-  justifyContent: 'space-between',
-};
-
-const riskPalette = (riskLevel: string) => {
-  const lowered = riskLevel.toLowerCase();
-
-  if (lowered === 'low') {
-    return {color: '#22c55e', surface: 'rgba(34,197,94,0.14)'};
-  }
-
-  if (lowered === 'medium') {
-    return {color: '#f59e0b', surface: 'rgba(245,158,11,0.14)'};
-  }
-
-  return {color: '#f87171', surface: 'rgba(248,113,113,0.14)'};
+const riskColor = (level: string) => {
+  const l = level.toLowerCase();
+  if (l === 'low') return '#10B981';
+  if (l === 'medium') return '#F59E0B';
+  return '#EF4444';
 };
 
 export const SummaryStats = ({
-  filesChanged,
   buildDuration,
+  pagesAffected,
+  completionRate,
   riskLevel,
 }: SummaryStatsProps) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
 
-  const buildReveal = spring({
-    fps,
-    frame: Math.max(0, frame - 8),
-    config: {damping: 18, stiffness: 120},
-  });
-  const durationReveal = spring({
-    fps,
-    frame: Math.max(0, frame - 18),
-    config: {damping: 18, stiffness: 120},
-  });
-  const riskReveal = spring({
-    fps,
-    frame: Math.max(0, frame - 28),
-    config: {damping: 18, stiffness: 120},
-  });
+  const card1 = spring({fps, frame: Math.max(0, frame - 6), config: {damping: 18, stiffness: 110}});
+  const card2 = spring({fps, frame: Math.max(0, frame - 16), config: {damping: 18, stiffness: 110}});
+  const card3 = spring({fps, frame: Math.max(0, frame - 26), config: {damping: 18, stiffness: 110}});
 
-  const displayedFiles = Math.round(interpolate(buildReveal, [0, 1], [0, filesChanged]));
-  const durationLength = Math.max(
-    1,
-    Math.round(interpolate(durationReveal, [0, 1], [0, buildDuration.length])),
-  );
-  const riskColors = riskPalette(riskLevel);
+  const displayedPages = Math.round(interpolate(card2, [0, 1], [0, pagesAffected]));
+  const displayedRate = Math.round(interpolate(card3, [0, 1], [0, completionRate]));
+  const durationLength = Math.max(1, Math.round(interpolate(card1, [0, 1], [0, buildDuration.length])));
 
   const cards = [
     {
-      label: 'Files Changed',
-      value: String(displayedFiles),
-      note: 'Implementation surface',
-      progress: buildReveal,
-      color: '#38bdf8',
-    },
-    {
-      label: 'Build Duration',
+      label: 'Delivery Time',
       value: buildDuration.slice(0, durationLength),
-      note: 'End-to-end execution',
-      progress: durationReveal,
-      color: '#38bdf8',
+      subtitle: 'End-to-end',
+      icon: '\u23F1',
+      progress: card1,
+      accent: '#5E6AD2',
     },
     {
-      label: 'Risk Level',
-      value: riskLevel,
-      note: 'Release readiness',
-      progress: riskReveal,
-      color: riskColors.color,
-      surface: riskColors.surface,
+      label: 'Pages Affected',
+      value: String(displayedPages),
+      subtitle: 'Routes updated',
+      icon: '\u25A6',
+      progress: card2,
+      accent: '#5E6AD2',
+    },
+    {
+      label: 'Completion',
+      value: `${displayedRate}%`,
+      subtitle: 'Criteria met',
+      icon: '\u2713',
+      progress: card3,
+      accent: displayedRate === 100 ? '#10B981' : '#F59E0B',
     },
   ];
 
@@ -100,126 +68,136 @@ export const SummaryStats = ({
     <AbsoluteFill
       style={{
         justifyContent: 'center',
-        padding: '96px 120px',
-        background:
-          'radial-gradient(circle at top center, rgba(56,189,248,0.16), transparent 34%), #0f172a',
-        fontFamily: '"Avenir Next", "Segoe UI", sans-serif',
+        padding: '80px 120px',
+        background: 'linear-gradient(180deg, #F8F9FA 0%, #F0F2F5 100%)',
+        fontFamily: '"Inter", "SF Pro Display", -apple-system, sans-serif',
       }}
     >
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 18,
-          marginBottom: 42,
-        }}
-      >
+      {/* Header */}
+      <div style={{marginBottom: 44}}>
         <div
           style={{
-            color: '#38bdf8',
+            color: '#5E6AD2',
             textTransform: 'uppercase',
-            letterSpacing: '0.16em',
-            fontSize: 28,
+            letterSpacing: '0.1em',
+            fontSize: 24,
             fontWeight: 700,
+            marginBottom: 14,
           }}
         >
           Delivery Snapshot
         </div>
         <div
           style={{
-            color: '#e2e8f0',
-            fontSize: 76,
-            lineHeight: 1.02,
+            color: '#1C2024',
+            fontSize: 56,
+            lineHeight: 1.1,
             fontWeight: 800,
+            letterSpacing: '-0.02em',
           }}
         >
-          Final checks at a glance
+          Impact at a glance
         </div>
       </div>
 
-      <div style={{display: 'flex', gap: 28}}>
+      {/* Cards */}
+      <div style={{display: 'flex', gap: 24}}>
         {cards.map((card) => {
           const opacity = interpolate(card.progress, [0, 1], [0, 1]);
-          const scale = interpolate(card.progress, [0, 1], [0.9, 1]);
-          const translateY = interpolate(card.progress, [0, 1], [26, 0]);
+          const translateY = interpolate(card.progress, [0, 1], [20, 0]);
+          const cardScale = interpolate(card.progress, [0, 1], [0.96, 1]);
 
           return (
             <div
               key={card.label}
               style={{
-                ...cardStyle,
+                flex: 1,
+                padding: '36px 32px',
+                borderRadius: 24,
+                background: '#FFFFFF',
+                border: '1px solid #E5E7EB',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 24,
                 opacity,
-                transform: `translateY(${translateY}px) scale(${scale})`,
+                transform: `translateY(${translateY}px) scale(${cardScale})`,
               }}
             >
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 12,
-                }}
-              >
+              {/* Icon + label */}
+              <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
                 <div
                   style={{
-                    color: '#94a3b8',
-                    fontSize: 24,
-                    fontWeight: 700,
-                    letterSpacing: '0.1em',
+                    width: 44,
+                    height: 44,
+                    borderRadius: 12,
+                    background: `${card.accent}12`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 22,
+                  }}
+                >
+                  {card.icon}
+                </div>
+                <div
+                  style={{
+                    color: '#9CA3AF',
+                    fontSize: 20,
+                    fontWeight: 600,
+                    letterSpacing: '0.04em',
                     textTransform: 'uppercase',
                   }}
                 >
                   {card.label}
                 </div>
-                <div
-                  style={{
-                    color: '#e2e8f0',
-                    fontSize: 24,
-                    lineHeight: 1.4,
-                  }}
-                >
-                  {card.note}
-                </div>
               </div>
 
+              {/* Value */}
               <div
                 style={{
-                  display: 'flex',
-                  alignItems: 'flex-end',
-                  gap: 16,
+                  color: card.accent,
+                  fontSize: 80,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                  letterSpacing: '-0.02em',
                 }}
               >
-                <div
-                  style={{
-                    color: card.color,
-                    fontSize: 94,
-                    fontWeight: 800,
-                    lineHeight: 0.95,
-                    textTransform: 'capitalize',
-                  }}
-                >
-                  {card.value}
-                </div>
-                {card.surface ? (
-                  <div
-                    style={{
-                      padding: '10px 16px',
-                      borderRadius: 999,
-                      background: card.surface,
-                      border: `1px solid ${card.color}44`,
-                      color: card.color,
-                      fontSize: 24,
-                      fontWeight: 800,
-                      textTransform: 'uppercase',
-                      marginBottom: 12,
-                    }}
-                  >
-                    Stable
-                  </div>
-                ) : null}
+                {card.value}
+              </div>
+
+              {/* Subtitle */}
+              <div style={{color: '#6B7280', fontSize: 22, fontWeight: 500}}>
+                {card.subtitle}
               </div>
             </div>
           );
         })}
+      </div>
+
+      {/* Risk badge */}
+      <div style={{marginTop: 28, display: 'flex', alignItems: 'center', gap: 12}}>
+        <div
+          style={{
+            width: 10,
+            height: 10,
+            borderRadius: '50%',
+            background: riskColor(riskLevel),
+          }}
+        />
+        <div style={{color: '#9CA3AF', fontSize: 20, fontWeight: 500}}>
+          Release readiness:
+        </div>
+        <div
+          style={{
+            color: riskColor(riskLevel),
+            fontSize: 20,
+            fontWeight: 700,
+            textTransform: 'capitalize',
+          }}
+        >
+          {riskLevel} risk
+        </div>
       </div>
     </AbsoluteFill>
   );

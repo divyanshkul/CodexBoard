@@ -9,36 +9,35 @@ import type {TicketVideoProps} from '../types';
 
 interface CriteriaChecklistProps {
   criteria: TicketVideoProps['criteria'];
+  completionRate: number;
 }
 
 const getStatusMeta = (status: TicketVideoProps['criteria'][number]['status']) => {
   if (status === 'pass') {
     return {
-      badge: '✓',
-      color: '#22c55e',
-      surface: 'rgba(34,197,94,0.1)',
-      label: 'Pass',
+      icon: '\u2713',
+      color: '#10B981',
+      bg: 'rgba(16,185,129,0.1)',
+      border: 'rgba(16,185,129,0.2)',
     };
   }
-
   if (status === 'fail') {
     return {
-      badge: '!',
-      color: '#f87171',
-      surface: 'rgba(248,113,113,0.1)',
-      label: 'Fail',
+      icon: '\u2717',
+      color: '#EF4444',
+      bg: 'rgba(239,68,68,0.1)',
+      border: 'rgba(239,68,68,0.2)',
     };
   }
-
   return {
-    badge: '?',
-    color: '#fbbf24',
-    surface: 'rgba(251,191,36,0.1)',
-    label: 'Unknown',
+    icon: '?',
+    color: '#F59E0B',
+    bg: 'rgba(245,158,11,0.1)',
+    border: 'rgba(245,158,11,0.2)',
   };
 };
 
-export const CriteriaChecklist = ({criteria}: CriteriaChecklistProps) => {
+export const CriteriaChecklist = ({criteria, completionRate}: CriteriaChecklistProps) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
 
@@ -47,80 +46,79 @@ export const CriteriaChecklist = ({criteria}: CriteriaChecklistProps) => {
     extrapolateRight: 'clamp',
   });
 
+  const passCount = criteria.filter(c => c.status === 'pass').length;
+
   return (
     <AbsoluteFill
       style={{
         justifyContent: 'center',
-        padding: '100px 140px',
-        background:
-          'radial-gradient(circle at top right, rgba(56,189,248,0.18), transparent 32%), #0f172a',
-        fontFamily: '"Avenir Next", "Segoe UI", sans-serif',
+        padding: '80px 120px',
+        background: 'linear-gradient(180deg, #F8F9FA 0%, #F0F2F5 100%)',
+        fontFamily: '"Inter", "SF Pro Display", -apple-system, sans-serif',
       }}
     >
+      {/* Header */}
       <div
         style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: 22,
+          gap: 16,
           opacity: headingOpacity,
-          marginBottom: 44,
+          marginBottom: 40,
         }}
       >
-        <div
-          style={{
-            fontSize: 28,
-            letterSpacing: '0.16em',
-            textTransform: 'uppercase',
-            color: '#38bdf8',
-            fontWeight: 700,
-          }}
-        >
-          Acceptance Criteria
+        <div style={{display: 'flex', alignItems: 'center', gap: 16}}>
+          <div
+            style={{
+              fontSize: 24,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: '#5E6AD2',
+              fontWeight: 700,
+            }}
+          >
+            Acceptance Criteria
+          </div>
+          <div
+            style={{
+              padding: '6px 16px',
+              borderRadius: 999,
+              background: completionRate === 100 ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
+              border: `1px solid ${completionRate === 100 ? 'rgba(16,185,129,0.2)' : 'rgba(245,158,11,0.2)'}`,
+              color: completionRate === 100 ? '#10B981' : '#F59E0B',
+              fontSize: 20,
+              fontWeight: 700,
+            }}
+          >
+            {passCount}/{criteria.length} Complete
+          </div>
         </div>
+
         <div
           style={{
-            fontSize: 72,
-            lineHeight: 1.05,
-            color: '#e2e8f0',
+            fontSize: 56,
+            lineHeight: 1.1,
+            color: '#1C2024',
             fontWeight: 800,
+            letterSpacing: '-0.02em',
           }}
         >
-          Implementation checks completed
-        </div>
-        <div
-          style={{
-            fontSize: 28,
-            lineHeight: 1.4,
-            color: '#94a3b8',
-            maxWidth: 1100,
-          }}
-        >
-          Each requirement is revealed in sequence to reinforce a clean, audited
-          rollout.
+          What was delivered
         </div>
       </div>
 
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 24,
-        }}
-      >
+      {/* Criteria list */}
+      <div style={{display: 'flex', flexDirection: 'column', gap: 18}}>
         {criteria.map((item, index) => {
           const delay = 18 + index * 26;
           const reveal = spring({
             fps,
             frame: Math.max(0, frame - delay),
-            config: {
-              damping: 16,
-              mass: 0.8,
-              stiffness: 120,
-            },
+            config: {damping: 16, mass: 0.8, stiffness: 120},
           });
 
           const opacity = interpolate(reveal, [0, 1], [0, 1]);
-          const translateY = interpolate(reveal, [0, 1], [32, 0]);
+          const translateY = interpolate(reveal, [0, 1], [24, 0]);
           const status = getStatusMeta(item.status);
 
           return (
@@ -129,68 +127,99 @@ export const CriteriaChecklist = ({criteria}: CriteriaChecklistProps) => {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 24,
-                padding: '26px 30px',
-                borderRadius: 28,
-                background: 'rgba(15,23,42,0.75)',
-                border: '1px solid rgba(148,163,184,0.16)',
-                boxShadow: '0 18px 60px rgba(15, 23, 42, 0.28)',
+                gap: 20,
+                padding: '24px 28px',
+                borderRadius: 20,
+                background: '#FFFFFF',
+                border: '1px solid #E5E7EB',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                 opacity,
                 transform: `translateY(${translateY}px)`,
               }}
             >
+              {/* Status icon */}
               <div
                 style={{
-                  width: 72,
-                  height: 72,
-                  borderRadius: 24,
-                  background: status.surface,
-                  border: `1px solid ${status.color}44`,
+                  width: 56,
+                  height: 56,
+                  borderRadius: 16,
+                  background: status.bg,
+                  border: `1px solid ${status.border}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: status.color,
-                  fontSize: 38,
+                  fontSize: 30,
                   fontWeight: 800,
                   flexShrink: 0,
                 }}
               >
-                {status.badge}
+                {status.icon}
               </div>
 
+              {/* Criterion text */}
               <div
                 style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8,
+                  color: '#1C2024',
+                  fontSize: 32,
+                  lineHeight: 1.3,
+                  fontWeight: 600,
                   flex: 1,
                 }}
               >
-                <div
-                  style={{
-                    color: '#e2e8f0',
-                    fontSize: 36,
-                    lineHeight: 1.2,
-                    fontWeight: 650,
-                  }}
-                >
-                  {item.criterion}
-                </div>
-                <div
-                  style={{
-                    color: status.color,
-                    fontSize: 24,
-                    fontWeight: 700,
-                    letterSpacing: '0.08em',
-                    textTransform: 'uppercase',
-                  }}
-                >
-                  {status.label}
-                </div>
+                {item.criterion}
+              </div>
+
+              {/* Status label */}
+              <div
+                style={{
+                  color: status.color,
+                  fontSize: 20,
+                  fontWeight: 700,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  flexShrink: 0,
+                }}
+              >
+                {item.status === 'pass' ? 'Passed' : item.status === 'fail' ? 'Failed' : 'Pending'}
               </div>
             </div>
           );
         })}
+      </div>
+
+      {/* Completion bar */}
+      <div style={{marginTop: 32, opacity: headingOpacity}}>
+        <div
+          style={{
+            height: 8,
+            borderRadius: 999,
+            background: '#E5E7EB',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              height: '100%',
+              width: `${completionRate}%`,
+              borderRadius: 999,
+              background: completionRate === 100
+                ? 'linear-gradient(90deg, #10B981, #34D399)'
+                : 'linear-gradient(90deg, #F59E0B, #FBBF24)',
+            }}
+          />
+        </div>
+        <div
+          style={{
+            marginTop: 10,
+            fontSize: 20,
+            color: '#9CA3AF',
+            fontWeight: 500,
+            textAlign: 'right',
+          }}
+        >
+          {completionRate}% Delivered
+        </div>
       </div>
     </AbsoluteFill>
   );

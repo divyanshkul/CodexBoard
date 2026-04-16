@@ -53,6 +53,13 @@ function mapOutputUpdate(
           (outputs as { path?: string }).path ??
           null,
       };
+    case "pdf":
+      return {
+        pdf_path:
+          (outputs as { pdf_path?: string; path?: string }).pdf_path ??
+          (outputs as { path?: string }).path ??
+          null,
+      };
     default:
       return null;
   }

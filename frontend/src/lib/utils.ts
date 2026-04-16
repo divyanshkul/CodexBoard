@@ -24,9 +24,10 @@ export const COLUMN_ORDER: TicketStatus[] = [
 
 export function formatDuration(seconds: number | null): string {
   if (seconds === null) return "";
-  if (seconds < 60) return `${seconds}s`;
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
+  const rounded = Math.round(seconds);
+  if (rounded < 60) return `${rounded}s`;
+  const mins = Math.floor(rounded / 60);
+  const secs = rounded % 60;
   return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
 }
 

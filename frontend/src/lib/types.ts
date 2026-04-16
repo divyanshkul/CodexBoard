@@ -35,6 +35,7 @@ export interface TicketOutputs {
   video_path: string | null;
   remotion_video_path: string | null;
   markdown_path: string | null;
+  pdf_path: string | null;
 }
 
 export interface AgentLog {

@@ -37,6 +37,7 @@ from models import (
 )
 from outputs.diffgen import generate_diff_heatmaps
 from outputs.markdown import generate_markdown_summary
+from outputs.pdf_report import generate_pdf_report
 from outputs.remotion_video import render_remotion_video
 from outputs.screenshots import capture_after_screenshots, capture_before_screenshots
 from outputs.video import generate_video
@@ -241,7 +242,10 @@ _active_server: DevServerManager | None = None
 
 
 async def _try_start_dev_server(cwd: str, port: int) -> str | None:
-    """Best-effort start a dev server.  Returns the URL or None."""
+    """Start a dev server. Returns the URL or None.
+
+    Logs LOUDLY on failure so we know exactly why screenshots are stubs.
+    """
     global _active_server
     try:
         _active_server = DevServerManager()
@@ -251,9 +255,21 @@ async def _try_start_dev_server(cwd: str, port: int) -> str | None:
             port=port,
             timeout=DEMO_PROJECT.get("startup_timeout", 30),
         )
+        logger.info(
+            "=== DEV SERVER STARTED === url=%s cwd=%s",
+            _active_server.url,
+            cwd,
+        )
         return _active_server.url
-    except Exception:
-        logger.warning("Could not start dev server on port %d", port, exc_info=True)
+    except Exception as exc:
+        logger.error(
+            "=== DEV SERVER FAILED === port=%d cwd=%s error=%s "
+            "Screenshots/video for this ticket will be STUBS.",
+            port,
+            cwd,
+            exc,
+            exc_info=True,
+        )
         _active_server = None
         return None
 
@@ -263,6 +279,7 @@ async def _try_stop_dev_server() -> None:
     if _active_server is not None:
         try:
             await _active_server.stop()
+            logger.info("=== DEV SERVER STOPPED ===")
         except Exception:
             logger.warning("Error stopping dev server", exc_info=True)
         _active_server = None
@@ -588,6 +605,22 @@ async def _generate_outputs(ticket: Ticket, manager: ConnectionManager) -> None:
             ticket.id,
             {"output_type": "markdown", "outputs": {"markdown_path": markdown_path}},
         )
+
+    # -- PDF slide-deck report (no server needed) --
+    if current_ticket.review_result is not None:
+        try:
+            pdf_path = await generate_pdf_report(
+                current_ticket, current_ticket.review_result
+            )
+            outputs = current_ticket.outputs.model_copy(update={"pdf_path": pdf_path})
+            current_ticket = update_ticket(ticket.id, outputs=outputs)
+            await manager.send_ticket_event(
+                "output_ready",
+                ticket.id,
+                {"output_type": "pdf", "outputs": {"pdf_path": pdf_path}},
+            )
+        except Exception:
+            logger.warning("PDF report generation failed for %s", ticket.id, exc_info=True)
 
     # -- Remotion demo video (no server needed, data-driven from ticket) --
     if current_ticket.review_result is not None:

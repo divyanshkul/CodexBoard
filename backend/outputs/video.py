@@ -55,18 +55,35 @@ async def generate_video(
     video_dir.mkdir(parents=True, exist_ok=True)
     resolved_routes = routes or extract_routes(ticket.description)
 
-    if server_url and _PLAYWRIGHT_OK:
-        try:
-            return await _record_narrated_walkthrough(
-                ticket, server_url, resolved_routes, video_dir
-            )
-        except Exception:
-            logger.warning("Real video recording failed, writing stub", exc_info=True)
+    if not server_url:
+        logger.warning(
+            "=== VIDEO STUB === reason=no server_url (dev server failed to start)"
+        )
+        stub = video_dir / "walkthrough.mp4"
+        stub.write_bytes(f"Mock walkthrough for {ticket.title}".encode())
+        return str(Path("video") / stub.name)
 
-    # Fallback stub
-    stub = video_dir / "walkthrough.mp4"
-    stub.write_bytes(f"Mock walkthrough for {ticket.title}".encode())
-    return str(Path("video") / stub.name)
+    if not _PLAYWRIGHT_OK:
+        logger.warning(
+            "=== VIDEO STUB === reason=Playwright not installed. "
+            "Run: pip install playwright && playwright install chromium"
+        )
+        stub = video_dir / "walkthrough.mp4"
+        stub.write_bytes(f"Mock walkthrough for {ticket.title}".encode())
+        return str(Path("video") / stub.name)
+
+    try:
+        return await _record_narrated_walkthrough(
+            ticket, server_url, resolved_routes, video_dir
+        )
+    except Exception:
+        logger.error(
+            "=== VIDEO STUB === reason=recording failed. See traceback above.",
+            exc_info=True,
+        )
+        stub = video_dir / "walkthrough.mp4"
+        stub.write_bytes(f"Mock walkthrough for {ticket.title}".encode())
+        return str(Path("video") / stub.name)
 
 
 # ------------------------------------------------------------------

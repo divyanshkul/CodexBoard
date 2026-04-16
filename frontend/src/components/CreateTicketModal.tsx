@@ -7,16 +7,17 @@ import { X, Plus, Trash2 } from "lucide-react";
 interface CreateTicketModalProps {
   onClose: () => void;
   onCreate: (data: CreateTicketRequest) => void;
+  projectName?: string;
 }
 
 export function CreateTicketModal({
   onClose,
   onCreate,
+  projectName,
 }: CreateTicketModalProps) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [criteria, setCriteria] = useState<string[]>([""]);
-  const [targetRepo, setTargetRepo] = useState("");
   const [screenshots, setScreenshots] = useState(true);
   const [pixelDiff, setPixelDiff] = useState(true);
   const [video, setVideo] = useState(false);
@@ -24,12 +25,12 @@ export function CreateTicketModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !description.trim() || !targetRepo.trim()) return;
+    if (!title.trim() || !description.trim()) return;
     onCreate({
       title: title.trim(),
       description: description.trim(),
       acceptance_criteria: criteria.filter((c) => c.trim()),
-      target_repo: targetRepo.trim(),
+      target_repo: "",  // Board injects the active project path
       output_preferences: {
         screenshots,
         pixel_diff: pixelDiff,
@@ -97,18 +98,28 @@ export function CreateTicketModal({
             />
           </div>
 
-          <div>
-            <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-[0.06em] mb-1.5">
-              Target repository
-            </label>
-            <input
-              type="text"
-              value={targetRepo}
-              onChange={(e) => setTargetRepo(e.target.value)}
-              placeholder="owner/repo"
-              className="w-full px-3.5 py-2.5 text-[13px] border border-border-input rounded-lg bg-card-bg text-text-primary placeholder:text-text-faint focus:outline-none focus:border-accent focus:ring-1 focus:ring-[var(--accent-bg)] transition-all font-mono"
-            />
-          </div>
+          {/* Project indicator (read-only, set by project selector in header) */}
+          {projectName && (
+            <div>
+              <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-[0.06em] mb-1.5">
+                Project
+              </label>
+              <div
+                className="flex items-center gap-2 px-3.5 py-2.5 text-[13px] border rounded-lg font-medium"
+                style={{
+                  borderColor: "var(--accent)",
+                  background: "var(--accent-bg)",
+                  color: "var(--accent)",
+                }}
+              >
+                <div
+                  className="w-2 h-2 rounded-full flex-shrink-0"
+                  style={{ background: "var(--status-review)" }}
+                />
+                {projectName}
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-[11px] font-semibold text-text-muted uppercase tracking-[0.06em] mb-1.5">
@@ -187,7 +198,7 @@ export function CreateTicketModal({
             <button
               type="submit"
               disabled={
-                !title.trim() || !description.trim() || !targetRepo.trim()
+                !title.trim() || !description.trim()
               }
               className="px-4 py-2 text-[13px] font-medium text-white rounded-lg transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 active:scale-[0.98]"
               style={{ background: "var(--accent)" }}

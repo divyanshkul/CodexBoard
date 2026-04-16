@@ -65,13 +65,25 @@ async def _capture(
     output_dir = ticket_dir / phase
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    if server_url and _PLAYWRIGHT_OK:
-        return await _capture_with_playwright(
-            server_url, resolved_routes, output_dir, phase
+    if not server_url:
+        logger.warning(
+            "=== SCREENSHOTS STUB === phase=%s reason=no server_url "
+            "(dev server failed to start). Writing 1x1 placeholders.",
+            phase,
         )
+        return _write_placeholders(resolved_routes, output_dir, phase)
 
-    # Fallback: write placeholder PNGs
-    return _write_placeholders(resolved_routes, output_dir, phase)
+    if not _PLAYWRIGHT_OK:
+        logger.warning(
+            "=== SCREENSHOTS STUB === phase=%s reason=Playwright not installed. "
+            "Run: pip install playwright && playwright install chromium",
+            phase,
+        )
+        return _write_placeholders(resolved_routes, output_dir, phase)
+
+    return await _capture_with_playwright(
+        server_url, resolved_routes, output_dir, phase
+    )
 
 
 async def _capture_with_playwright(

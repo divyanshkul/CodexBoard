@@ -33,6 +33,7 @@ const ticket: Ticket = {
     video_path: null,
     remotion_video_path: null,
     markdown_path: null,
+    pdf_path: null,
   },
   current_phase: null,
   codex_thread_id: null,

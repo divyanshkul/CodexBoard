@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Ticket } from "../lib/types";
 import { formatRelativeTime, formatDuration } from "../lib/utils";
 import { Clock, GitBranch, Play, MoreHorizontal, RotateCcw, AlertTriangle, CheckCircle2, Circle, MessageSquare } from "lucide-react";
+import { PipelineProgressCompact } from "./PipelineProgress";
 
 /** Live elapsed-time hook -- ticks every second while active. */
 function useElapsedTime(startedAt: string | null, active: boolean): string | null {
@@ -217,6 +218,13 @@ export function TicketCard({ ticket, onClick, onStartBuild, onDragStart, onDragE
             {formatRelativeTime(ticket.created_at)}
           </span>
         </div>
+
+        {/* Pipeline progress -- user-friendly current step */}
+        {(ticket.status === "in_progress" || ticket.status === "review") && (
+          <div className="mt-2">
+            <PipelineProgressCompact ticket={ticket} />
+          </div>
+        )}
 
         {ticket.status === "in_progress" && ticket.rejection_feedback && (
           <div className="mt-2.5 rounded-md border px-2.5 py-2" style={{ borderColor: "var(--status-failed)", background: "var(--status-failed-bg)" }}>

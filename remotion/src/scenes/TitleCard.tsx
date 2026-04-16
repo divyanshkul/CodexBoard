@@ -9,32 +9,18 @@ import {
 interface TitleCardProps {
   title: string;
   id: string;
-  repo: string;
+  description: string;
+  buildDuration: string;
 }
 
-const panelStyle = {
-  width: 1240,
-  padding: '72px 84px',
-  borderRadius: 36,
-  background:
-    'linear-gradient(145deg, rgba(15,23,42,0.72), rgba(15,23,42,0.92))',
-  border: '1px solid rgba(148,163,184,0.18)',
-  boxShadow: '0 40px 120px rgba(15, 23, 42, 0.45)',
-  backdropFilter: 'blur(18px)',
-};
-
-export const TitleCard = ({title, id, repo}: TitleCardProps) => {
+export const TitleCard = ({title, id, description, buildDuration}: TitleCardProps) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
 
   const entrance = spring({
     fps,
     frame,
-    config: {
-      damping: 18,
-      mass: 0.85,
-      stiffness: 120,
-    },
+    config: {damping: 20, mass: 0.8, stiffness: 100},
   });
 
   const opacity = interpolate(frame, [0, 18], [0, 1], {
@@ -42,112 +28,162 @@ export const TitleCard = ({title, id, repo}: TitleCardProps) => {
     extrapolateRight: 'clamp',
   });
 
-  const translateY = interpolate(entrance, [0, 1], [70, 0]);
-  const accentWidth = interpolate(entrance, [0, 1], [0, 180]);
+  const translateY = interpolate(entrance, [0, 1], [40, 0]);
+  const scale = interpolate(entrance, [0, 1], [0.97, 1]);
+
+  const badgeOpacity = interpolate(frame, [8, 22], [0, 1], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
 
   return (
     <AbsoluteFill
       style={{
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 80,
-        background:
-          'radial-gradient(circle at top left, rgba(56,189,248,0.22), transparent 36%), radial-gradient(circle at bottom right, rgba(14,165,233,0.2), transparent 30%), #0f172a',
+        padding: 100,
+        background: 'linear-gradient(145deg, #F8F9FA 0%, #EEF0F4 50%, #E8EBF0 100%)',
+        fontFamily: '"Inter", "SF Pro Display", -apple-system, sans-serif',
       }}
     >
+      {/* Subtle geometric accent */}
       <div
         style={{
           position: 'absolute',
-          inset: 36,
-          borderRadius: 40,
-          border: '1px solid rgba(148,163,184,0.08)',
+          top: -120,
+          right: -120,
+          width: 500,
+          height: 500,
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(94,106,210,0.08), transparent 70%)',
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          bottom: -80,
+          left: -80,
+          width: 400,
+          height: 400,
+          borderRadius: '50%',
+          background: 'radial-gradient(circle, rgba(16,185,129,0.06), transparent 70%)',
         }}
       />
 
       <div
         style={{
-          ...panelStyle,
+          width: 1300,
+          padding: '64px 80px',
+          borderRadius: 28,
+          background: '#FFFFFF',
+          border: '1px solid #E5E7EB',
+          boxShadow: '0 4px 24px rgba(0,0,0,0.06), 0 1px 4px rgba(0,0,0,0.04)',
           opacity,
-          transform: `translateY(${translateY}px)`,
+          transform: `translateY(${translateY}px) scale(${scale})`,
           display: 'flex',
           flexDirection: 'column',
           gap: 28,
         }}
       >
+        {/* Shipped badge */}
         <div
           style={{
-            width: accentWidth,
-            height: 8,
-            borderRadius: 999,
-            background: '#38bdf8',
-            boxShadow: '0 0 28px rgba(56, 189, 248, 0.45)',
-          }}
-        />
-
-        <div
-          style={{
-            fontSize: 30,
-            fontWeight: 700,
-            letterSpacing: '0.18em',
-            textTransform: 'uppercase',
-            color: '#38bdf8',
-            fontFamily: '"Avenir Next", "Segoe UI", sans-serif',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            opacity: badgeOpacity,
           }}
         >
-          CodexBoard Delivery Summary
+          <div
+            style={{
+              padding: '8px 18px',
+              borderRadius: 999,
+              background: 'rgba(16,185,129,0.1)',
+              border: '1px solid rgba(16,185,129,0.2)',
+              color: '#10B981',
+              fontSize: 22,
+              fontWeight: 700,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+            }}
+          >
+            Feature Delivered
+          </div>
+          <div
+            style={{
+              color: '#9CA3AF',
+              fontSize: 22,
+              fontWeight: 500,
+            }}
+          >
+            {id}
+          </div>
         </div>
 
+        {/* Title */}
         <div
           style={{
-            fontSize: 82,
-            lineHeight: 1.04,
+            fontSize: 72,
+            lineHeight: 1.08,
             fontWeight: 800,
-            color: '#e2e8f0',
-            fontFamily: '"Avenir Next", "Segoe UI", sans-serif',
+            color: '#1C2024',
+            letterSpacing: '-0.02em',
           }}
         >
           {title}
         </div>
 
+        {/* Description */}
+        <div
+          style={{
+            fontSize: 30,
+            lineHeight: 1.5,
+            color: '#6B7280',
+            maxWidth: 1000,
+          }}
+        >
+          {description}
+        </div>
+
+        {/* Delivery time */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 20,
-            fontFamily: '"Avenir Next", "Segoe UI", sans-serif',
+            gap: 12,
+            marginTop: 8,
           }}
         >
           <div
             style={{
-              padding: '14px 24px',
-              borderRadius: 999,
-              background: 'rgba(56,189,248,0.12)',
-              border: '1px solid rgba(56,189,248,0.28)',
-              color: '#e2e8f0',
-              fontSize: 32,
-              fontWeight: 700,
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: '#5E6AD2',
             }}
-          >
-            {id}
-          </div>
+          />
           <div
             style={{
-              color: '#94a3b8',
-              fontSize: 30,
-              fontWeight: 500,
-            }}
-          >
-            Repository
-          </div>
-          <div
-            style={{
-              color: '#e2e8f0',
-              fontSize: 32,
+              fontSize: 24,
+              color: '#5E6AD2',
               fontWeight: 600,
             }}
           >
-            {repo}
+            Delivered in {buildDuration}
           </div>
+        </div>
+
+        {/* Branding */}
+        <div
+          style={{
+            fontSize: 18,
+            color: '#D1D5DB',
+            fontWeight: 500,
+            letterSpacing: '0.04em',
+            marginTop: 4,
+          }}
+        >
+          Powered by CodexBoard
         </div>
       </div>
     </AbsoluteFill>

@@ -70,7 +70,8 @@ class TicketOutputs(BaseModel):
     diff_heatmaps: dict[str, str] = Field(default_factory=dict)
     video_path: Optional[str] = None
     remotion_video_path: Optional[str] = None
-    markdown_path: Optional[str] = None
+    markdown_path: Optional[str] = None  # legacy, kept for compat
+    pdf_path: Optional[str] = None
 
 
 class AgentLog(BaseModel):

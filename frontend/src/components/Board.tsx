@@ -32,6 +32,13 @@ export function Board() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [draggingTicketId, setDraggingTicketId] = useState<string | null>(null);
 
+  // Project selector -- default to the demo project
+  const KNOWN_PROJECTS = [
+    { name: "demo-project", path: "/Users/divyansh/Desktop/Divyansh/Development/Hackathons/CodexHack/CodexBoard/demo-project" },
+  ];
+  const [activeProject, setActiveProject] = useState(KNOWN_PROJECTS[0]);
+  const [showProjectPicker, setShowProjectPicker] = useState(false);
+
   // Track in-flight API calls by ticket id to prevent double-clicks
   const inflightRef = useRef<Set<string>>(new Set());
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
@@ -64,7 +71,9 @@ export function Board() {
   // -- Handlers ---------------------------------------------------------
 
   const handleCreate = useCallback(
-    async (data: CreateTicketRequest) => {
+    async (rawData: CreateTicketRequest) => {
+      // Inject active project path
+      const data = { ...rawData, target_repo: activeProject.path };
       if (useMock) {
         const newTicket: Ticket = {
           id: `TKT-${String(tickets.length + 1).padStart(3, "0")}`,
@@ -86,7 +95,8 @@ export function Board() {
             diff_heatmaps: {},
             video_path: null,
             remotion_video_path: null,
-            markdown_path: null,
+             markdown_path: null,
+              pdf_path: null,
           },
           current_phase: null,
           codex_thread_id: null,
@@ -104,7 +114,7 @@ export function Board() {
       }
       setShowCreateModal(false);
     },
-    [useMock, tickets.length, dispatch, addToast]
+    [useMock, tickets.length, dispatch, addToast, activeProject.path]
   );
 
   const handleStartBuild = useCallback(
@@ -250,6 +260,77 @@ export function Board() {
               {tickets.length}
             </span>
           </div>
+          <div
+            className="h-4 w-px"
+            style={{ background: "var(--border-divider)" }}
+          />
+          {/* Project selector */}
+          <div className="relative">
+            <button
+              onClick={() => setShowProjectPicker(!showProjectPicker)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px] font-medium rounded-md border transition-all duration-100"
+              style={{
+                borderColor: "var(--accent)",
+                color: "var(--accent)",
+                background: "var(--accent-bg)",
+              }}
+            >
+              <div
+                className="w-2 h-2 rounded-full"
+                style={{ background: "var(--status-review)" }}
+              />
+              {activeProject.name}
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ opacity: 0.6 }}>
+                <path d="M2.5 4L5 6.5L7.5 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+            {showProjectPicker && (
+              <div
+                className="absolute top-full left-0 mt-1 w-72 rounded-lg border border-border-card bg-card-bg overflow-hidden z-50"
+                style={{ boxShadow: "var(--shadow-modal)" }}
+              >
+                <div className="p-2 border-b border-border-divider">
+                  <div className="text-[10px] font-semibold text-text-muted uppercase tracking-[0.06em] px-2 py-1">
+                    Select project
+                  </div>
+                </div>
+                {KNOWN_PROJECTS.map((project) => (
+                  <button
+                    key={project.path}
+                    onClick={() => {
+                      setActiveProject(project);
+                      setShowProjectPicker(false);
+                    }}
+                    className={`w-full text-left px-3 py-2.5 text-[12px] hover:bg-[var(--accent-bg)] transition-colors ${
+                      activeProject.path === project.path ? "bg-[var(--accent-bg)]" : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{
+                          background: activeProject.path === project.path
+                            ? "var(--status-review)"
+                            : "var(--border-card)",
+                        }}
+                      />
+                      <div>
+                        <div className="font-medium text-text-primary">{project.name}</div>
+                        <div className="text-[10px] text-text-muted font-mono truncate mt-0.5">
+                          {project.path}
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+                <div className="p-2 border-t border-border-divider">
+                  <div className="text-[10px] text-text-faint px-2 py-1">
+                    All tickets will target this project
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right */}
@@ -337,6 +418,7 @@ export function Board() {
         <CreateTicketModal
           onClose={() => setShowCreateModal(false)}
           onCreate={handleCreate}
+          projectName={activeProject.name}
         />
       )}
 

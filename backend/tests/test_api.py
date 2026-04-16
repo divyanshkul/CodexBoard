@@ -52,8 +52,13 @@ async def test_build_ticket(client, sample_ticket):
     assert response.status_code == 200
     assert response.json()["status"] == "in_progress"
 
-    await asyncio.sleep(0.05)
-    updated = get_ticket(sample_ticket.id)
+    # Pipeline runs async -- give it time to complete (mock mode is fast but
+    # _try_start_dev_server may attempt and fail on the temp dir)
+    for _ in range(40):
+        await asyncio.sleep(0.1)
+        updated = get_ticket(sample_ticket.id)
+        if updated and updated.status in (TicketStatus.REVIEW, TicketStatus.DONE):
+            break
     assert updated is not None
     assert updated.status == TicketStatus.REVIEW
     assert updated.review_result is not None
