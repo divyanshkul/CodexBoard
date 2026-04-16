@@ -311,6 +311,7 @@ new file mode 100644
         "navbar-desktop": "/outputs/TKT-003/diff/navbar-desktop.png",
       },
       video_path: null,
+      remotion_video_path: null,
       markdown_path: "/outputs/TKT-003/summary.md",
     },
     current_phase: "review",

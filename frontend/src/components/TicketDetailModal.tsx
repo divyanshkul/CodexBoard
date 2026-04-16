@@ -19,11 +19,13 @@ import {
   Clock,
   GitBranch,
   ExternalLink,
+  Loader2,
 } from "lucide-react";
 
 interface TicketDetailModalProps {
   ticket: Ticket;
   onClose: () => void;
+  isLoading?: boolean;
   onStartBuild?: () => void;
   onApprove?: () => void;
   onReject?: (feedback: string) => void;
@@ -34,6 +36,7 @@ type Tab = "overview" | "plan" | "diff" | "review" | "logs" | "outputs";
 export function TicketDetailModal({
   ticket,
   onClose,
+  isLoading = false,
   onStartBuild,
   onApprove,
   onReject,
@@ -303,10 +306,11 @@ export function TicketDetailModal({
             {ticket.status === "todo" && onStartBuild && (
               <button
                 onClick={onStartBuild}
-                className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium text-white rounded-lg transition-all duration-150 hover:brightness-110 active:scale-[0.98]"
+                disabled={isLoading}
+                className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium text-white rounded-lg transition-all duration-150 hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
                 style={{ background: "var(--accent)" }}
               >
-                <Play size={13} fill="white" />
+                {isLoading ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} fill="white" />}
                 Start build
               </button>
             )}
@@ -314,10 +318,11 @@ export function TicketDetailModal({
             {ticket.status === "failed" && onStartBuild && (
               <button
                 onClick={onStartBuild}
-                className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium text-white rounded-lg transition-all duration-150 hover:brightness-110 active:scale-[0.98]"
+                disabled={isLoading}
+                className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium text-white rounded-lg transition-all duration-150 hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
                 style={{ background: "var(--accent)" }}
               >
-                <Play size={13} fill="white" />
+                {isLoading ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} fill="white" />}
                 Retry build
               </button>
             )}
@@ -368,7 +373,8 @@ export function TicketDetailModal({
                   <>
                     <button
                       onClick={() => setShowRejectInput(true)}
-                      className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium rounded-lg border transition-all duration-150 hover:brightness-95"
+                      disabled={isLoading}
+                      className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium rounded-lg border transition-all duration-150 hover:brightness-95 disabled:opacity-50 disabled:pointer-events-none"
                       style={{
                         borderColor: "var(--status-failed)",
                         color: "var(--status-failed)",
@@ -380,10 +386,11 @@ export function TicketDetailModal({
                     </button>
                     <button
                       onClick={onApprove}
-                      className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium text-white rounded-lg transition-all duration-150 hover:brightness-110 active:scale-[0.98]"
+                      disabled={isLoading}
+                      className="flex items-center gap-1.5 px-4 py-2 text-[13px] font-medium text-white rounded-lg transition-all duration-150 hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
                       style={{ background: "var(--status-done)" }}
                     >
-                      <Check size={13} strokeWidth={2.5} />
+                      {isLoading ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} strokeWidth={2.5} />}
                       Approve
                     </button>
                   </>

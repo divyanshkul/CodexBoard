@@ -1,8 +1,34 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Ticket } from "../lib/types";
 import { formatRelativeTime, formatDuration } from "../lib/utils";
 import { Clock, GitBranch, Play, MoreHorizontal, RotateCcw, AlertTriangle, CheckCircle2, Circle, MessageSquare } from "lucide-react";
+
+/** Live elapsed-time hook -- ticks every second while active. */
+function useElapsedTime(startedAt: string | null, active: boolean): string | null {
+  const [elapsed, setElapsed] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!active || !startedAt) {
+      setElapsed(null);
+      return;
+    }
+
+    const tick = () => {
+      const diff = Math.max(0, Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000));
+      const m = Math.floor(diff / 60);
+      const s = diff % 60;
+      setElapsed(m > 0 ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`);
+    };
+
+    tick(); // immediate first render
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [startedAt, active]);
+
+  return elapsed;
+}
 
 function countChangedFiles(diff: string | null): number {
   if (!diff) {
@@ -21,6 +47,11 @@ interface TicketCardProps {
 }
 
 export function TicketCard({ ticket, onClick, onStartBuild, onDragStart, onDragEnd, isDragging }: TicketCardProps) {
+  const liveElapsed = useElapsedTime(
+    ticket.build_started_at,
+    ticket.status === "in_progress"
+  );
+
   const borderColor =
     ticket.status === "in_progress"
       ? "var(--status-in-progress)"
@@ -99,7 +130,7 @@ export function TicketCard({ ticket, onClick, onStartBuild, onDragStart, onDragE
         </div>
 
         {/* Title */}
-        <p className="text-[13px] font-medium text-text-primary leading-[1.4] mb-2.5 tracking-[-0.01em]">
+        <p className="text-[13px] font-medium text-text-primary leading-[1.4] mb-2.5 tracking-[-0.01em] line-clamp-2">
           {ticket.title}
         </p>
 
@@ -111,13 +142,18 @@ export function TicketCard({ ticket, onClick, onStartBuild, onDragStart, onDragE
             {repoLabel}
           </span>
 
-          {/* Duration */}
-          {ticket.build_duration_seconds !== null && (
+          {/* Duration -- live counter while in_progress, static when done */}
+          {ticket.status === "in_progress" && liveElapsed ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium tabular-nums px-1.5 py-[1px] rounded" style={{ background: "var(--status-in-progress-bg)", color: "var(--status-in-progress)" }}>
+              <Clock size={9} strokeWidth={2.5} />
+              {liveElapsed}
+            </span>
+          ) : ticket.build_duration_seconds !== null ? (
             <span className="inline-flex items-center gap-1 text-[11px] text-text-muted bg-[var(--border-divider)] px-1.5 py-[1px] rounded">
               <Clock size={9} strokeWidth={2.5} />
               {formatDuration(ticket.build_duration_seconds)}
             </span>
-          )}
+          ) : null}
 
           {/* Phase badge */}
           {ticket.current_phase && ticket.status === "in_progress" && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Ticket, TicketStatus, CreateTicketRequest } from "../lib/types";
 import { useTickets } from "../hooks/useTickets";
 import { useWebSocket } from "../hooks/useWebSocket";
@@ -8,6 +8,7 @@ import { COLUMN_ORDER } from "../lib/utils";
 import { Column } from "./Column";
 import { CreateTicketModal } from "./CreateTicketModal";
 import { TicketDetailModal } from "./TicketDetailModal";
+import { ToastContainer, useToasts } from "./Toast";
 import { api } from "../lib/api";
 import {
   Plus,
@@ -15,7 +16,6 @@ import {
   Loader2,
   Filter,
   SlidersHorizontal,
-  AlertCircle,
 } from "lucide-react";
 
 const useMockData =
@@ -26,19 +26,45 @@ export function Board() {
   const { tickets, dispatch, loading, error, getByStatus } =
     useTickets(useMock);
   const { startBuild } = useWebSocket(dispatch, useMock);
+  const { toasts, addToast, dismissToast } = useToasts();
 
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [draggingTicketId, setDraggingTicketId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+
+  // Track in-flight API calls by ticket id to prevent double-clicks
+  const inflightRef = useRef<Set<string>>(new Set());
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
   const currentSelected = selectedTicket
     ? tickets.find((t) => t.id === selectedTicket.id) || null
     : null;
 
+  // -- Guard helper: prevent concurrent actions on same ticket ----------
+  const withGuard = useCallback(
+    async (ticketId: string, actionLabel: string, fn: () => Promise<void>) => {
+      if (inflightRef.current.has(ticketId)) return;
+      inflightRef.current.add(ticketId);
+      setLoadingAction(ticketId);
+      try {
+        await fn();
+      } catch (err) {
+        addToast(
+          err instanceof Error ? err.message : `Failed to ${actionLabel}.`,
+          "error"
+        );
+      } finally {
+        inflightRef.current.delete(ticketId);
+        setLoadingAction((prev) => (prev === ticketId ? null : prev));
+      }
+    },
+    [addToast]
+  );
+
+  // -- Handlers ---------------------------------------------------------
+
   const handleCreate = useCallback(
     async (data: CreateTicketRequest) => {
-      setActionError(null);
       if (useMock) {
         const newTicket: Ticket = {
           id: `TKT-${String(tickets.length + 1).padStart(3, "0")}`,
@@ -72,58 +98,47 @@ export function Board() {
           const ticket = await api.createTicket(data);
           dispatch({ type: "ADD_TICKET", ticket });
         } catch (err) {
-          setActionError(err instanceof Error ? err.message : "Failed to create ticket.");
+          addToast(err instanceof Error ? err.message : "Failed to create ticket.", "error");
           return;
         }
       }
       setShowCreateModal(false);
     },
-    [useMock, tickets.length, dispatch]
+    [useMock, tickets.length, dispatch, addToast]
   );
 
   const handleStartBuild = useCallback(
     async (ticketId: string) => {
-      setActionError(null);
-      startBuild(ticketId);
       if (useMock) {
+        startBuild(ticketId);
         return;
       }
-      try {
+      await withGuard(ticketId, "start build", async () => {
+        startBuild(ticketId);
         const ticket = await api.startBuild(ticketId);
         dispatch({ type: "UPDATE_TICKET", ticket });
-      } catch (err) {
-        setActionError(err instanceof Error ? err.message : "Failed to start build.");
-      }
+      });
     },
-    [dispatch, startBuild, useMock]
+    [dispatch, startBuild, useMock, withGuard]
   );
 
   const handleApprove = useCallback(
     async (ticketId: string) => {
-      setActionError(null);
       if (useMock) {
-        dispatch({
-          type: "UPDATE_STATUS",
-          ticket_id: ticketId,
-          status: "done",
-        });
-      } else {
-        try {
-          const ticket = await api.approveTicket(ticketId);
-          dispatch({ type: "UPDATE_TICKET", ticket });
-        } catch (err) {
-          setActionError(err instanceof Error ? err.message : "Failed to approve ticket.");
-        }
+        dispatch({ type: "UPDATE_STATUS", ticket_id: ticketId, status: "done" });
+        return;
       }
+      await withGuard(ticketId, "approve ticket", async () => {
+        const ticket = await api.approveTicket(ticketId);
+        dispatch({ type: "UPDATE_TICKET", ticket });
+      });
     },
-    [useMock, dispatch]
+    [useMock, dispatch, withGuard]
   );
 
   const handleReject = useCallback(
     async (ticketId: string, feedback: string) => {
-      setActionError(null);
       if (useMock) {
-        // Build a fully-reset ticket matching real backend behavior
         const existing = tickets.find((t) => t.id === ticketId);
         if (existing) {
           const retryTicket: Ticket = {
@@ -141,19 +156,16 @@ export function Board() {
             current_phase: "building",
           };
           dispatch({ type: "UPDATE_TICKET", ticket: retryTicket });
-          // Re-trigger the mock build simulation
           startBuild(ticketId);
         }
-      } else {
-        try {
-          const ticket = await api.rejectTicket(ticketId, { feedback });
-          dispatch({ type: "UPDATE_TICKET", ticket });
-        } catch (err) {
-          setActionError(err instanceof Error ? err.message : "Failed to reject ticket.");
-        }
+        return;
       }
+      await withGuard(ticketId, "reject ticket", async () => {
+        const ticket = await api.rejectTicket(ticketId, { feedback });
+        dispatch({ type: "UPDATE_TICKET", ticket });
+      });
     },
-    [useMock, tickets, dispatch, startBuild]
+    [useMock, tickets, dispatch, startBuild, withGuard]
   );
 
   const handleMoveTicket = useCallback(
@@ -169,14 +181,15 @@ export function Board() {
         ticket_id: ticketId,
         status: newStatus,
       });
-      // If moved to in_progress, kick off the build simulation
       if (newStatus === "in_progress" && ticket.status === "todo") {
         startBuild(ticketId);
       }
       setDraggingTicketId(null);
     },
-    [tickets, dispatch, startBuild]
+    [tickets, dispatch, startBuild, useMock]
   );
+
+  // -- Render -----------------------------------------------------------
 
   if (loading) {
     return (
@@ -202,6 +215,8 @@ export function Board() {
       </div>
     );
   }
+
+  const isTicketLoading = (id: string) => loadingAction === id;
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -262,14 +277,7 @@ export function Board() {
         </div>
       </header>
 
-      {actionError && (
-        <div className="px-4 py-2 border-b border-border-divider bg-[var(--status-failed-bg)] text-[12px] text-[var(--status-failed)] flex items-center gap-2">
-          <AlertCircle size={14} />
-          {actionError}
-        </div>
-      )}
-
-      {/* Board columns — full width, evenly distributed */}
+      {/* Board columns */}
       <div className="flex-1 flex overflow-hidden">
         {COLUMN_ORDER.map((status, i) => (
           <div
@@ -302,7 +310,7 @@ export function Board() {
           </div>
         ))}
 
-        {/* Failed column — only if there are failed tickets */}
+        {/* Failed column -- only shown when needed */}
         {getByStatus("failed").length > 0 && (
           <div
             className="flex flex-col flex-1 min-w-0"
@@ -336,6 +344,7 @@ export function Board() {
         <TicketDetailModal
           ticket={currentSelected}
           onClose={() => setSelectedTicket(null)}
+          isLoading={isTicketLoading(currentSelected.id)}
           onStartBuild={
             currentSelected.status === "todo" ||
             currentSelected.status === "failed"
@@ -354,6 +363,9 @@ export function Board() {
           }
         />
       )}
+
+      {/* Toast notifications */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

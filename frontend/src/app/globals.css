@@ -201,6 +201,24 @@ body {
   outline-offset: 1px;
 }
 
+/* Toast enter animation */
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(20px) scale(0.95); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+.animate-toast-in {
+  animation: toastIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Card column transition -- plays when card remounts in a new column */
+@keyframes cardEnter {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.card-enter {
+  animation: cardEnter 0.2s ease-out both;
+}
+
 /* Drag-and-drop */
 .drop-target-active {
   background: var(--accent-subtle);

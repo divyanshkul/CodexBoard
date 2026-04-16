@@ -10,6 +10,7 @@ import {
   TicketOutputs,
   WSMessage,
 } from "../lib/types";
+import { api } from "../lib/api";
 import { mockWS } from "../mock/mockWebSocket";
 
 function isTicket(value: unknown): value is Ticket {
@@ -144,11 +145,22 @@ export function mapWSMessageToActions(msg: WSMessage): TicketAction[] {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Reconnecting WebSocket hook
+// ---------------------------------------------------------------------------
+
+const WS_BACKOFF_BASE = 1000;
+const WS_BACKOFF_MAX = 10000;
+
 export function useWebSocket(
   dispatch: React.Dispatch<TicketAction>,
   useMock = false
 ) {
   const wsRef = useRef<WebSocket | null>(null);
+  const retryRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guard against reconnecting after unmount
+  const mountedRef = useRef(true);
 
   const handleMessage = useCallback(
     (msg: WSMessage) => {
@@ -159,26 +171,75 @@ export function useWebSocket(
     [dispatch]
   );
 
-  useEffect(() => {
-    if (useMock) {
-      mockWS.connect(handleMessage);
-      return () => mockWS.disconnect();
+  /** Re-fetch all tickets to sync state after a reconnect. */
+  const resyncTickets = useCallback(async () => {
+    try {
+      const tickets = await api.getTickets();
+      dispatch({ type: "SET_TICKETS", tickets });
+    } catch {
+      /* silent -- next reconnect will try again */
     }
+  }, [dispatch]);
+
+  /** Create a WebSocket and wire event handlers. */
+  const connect = useCallback(() => {
+    if (!mountedRef.current) return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
     wsRef.current = ws;
+
+    ws.onopen = () => {
+      retryRef.current = 0; // reset backoff on success
+      // If this is a reconnect (not the first connect), re-fetch state
+      resyncTickets();
+    };
 
     ws.onmessage = (event) => {
       const msg: WSMessage = JSON.parse(event.data);
       handleMessage(msg);
     };
 
-    return () => {
+    ws.onclose = () => {
+      wsRef.current = null;
+      scheduleReconnect();
+    };
+
+    ws.onerror = () => {
+      // onclose fires after onerror, so reconnect happens there
       ws.close();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handleMessage, resyncTickets]);
+
+  const scheduleReconnect = useCallback(() => {
+    if (!mountedRef.current) return;
+    const delay = Math.min(WS_BACKOFF_BASE * Math.pow(2, retryRef.current), WS_BACKOFF_MAX);
+    retryRef.current += 1;
+    timerRef.current = setTimeout(connect, delay);
+  }, [connect]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    if (useMock) {
+      mockWS.connect(handleMessage);
+      return () => {
+        mountedRef.current = false;
+        mockWS.disconnect();
+      };
+    }
+
+    connect();
+
+    return () => {
+      mountedRef.current = false;
+      if (timerRef.current) clearTimeout(timerRef.current);
+      wsRef.current?.close();
       wsRef.current = null;
     };
-  }, [useMock, handleMessage]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useMock]);
 
   const startBuild = useCallback(
     (ticketId: string) => {

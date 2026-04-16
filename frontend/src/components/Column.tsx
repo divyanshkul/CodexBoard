@@ -100,10 +100,10 @@ export function Column({
 
       {/* Card list */}
       <div className="flex flex-col gap-[6px] column-scroll overflow-y-auto flex-1 px-2 pb-4">
-        {tickets.map((ticket, i) => (
+        {tickets.map((ticket) => (
           <div
             key={ticket.id}
-            className={`animate-slide-up animate-stagger-${Math.min(i + 1, 4)}`}
+            className="card-enter"
           >
             <TicketCard
               ticket={ticket}
