@@ -37,6 +37,7 @@ describe("mapWSMessageToActions", () => {
             after_screenshots: {},
             diff_heatmaps: {},
             video_path: null,
+            remotion_video_path: null,
             markdown_path: null,
           },
           current_phase: "building",

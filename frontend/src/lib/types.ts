@@ -33,6 +33,7 @@ export interface TicketOutputs {
   after_screenshots: Record<string, string>;
   diff_heatmaps: Record<string, string>;
   video_path: string | null;
+  remotion_video_path: string | null;
   markdown_path: string | null;
 }
 

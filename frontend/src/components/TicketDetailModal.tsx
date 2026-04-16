@@ -280,6 +280,14 @@ export function TicketDetailModal({
               {ticket.outputs.video_path && (
                 <VideoPlayer ticketId={ticket.id} videoPath={ticket.outputs.video_path} />
               )}
+              {ticket.outputs.remotion_video_path && (
+                <div>
+                  <h4 className="text-[13px] font-semibold text-text-primary mb-2">
+                    Demo Summary Video
+                  </h4>
+                  <VideoPlayer ticketId={ticket.id} videoPath={ticket.outputs.remotion_video_path} />
+                </div>
+              )}
               {ticket.outputs.markdown_path && (
                 <MarkdownViewer ticketId={ticket.id} path={ticket.outputs.markdown_path} />
               )}

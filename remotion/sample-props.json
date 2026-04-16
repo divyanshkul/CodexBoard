@@ -1,0 +1,24 @@
+{
+  "ticket": {
+    "title": "Add password reset to settings page",
+    "id": "CB-002",
+    "repo": "my-react-app",
+    "criteria": [
+      {
+        "criterion": "Reset button appears on settings page",
+        "status": "pass"
+      },
+      {
+        "criterion": "Email confirmation is sent",
+        "status": "pass"
+      },
+      {
+        "criterion": "Works on mobile viewport",
+        "status": "pass"
+      }
+    ],
+    "filesChanged": 5,
+    "buildDuration": "3m 22s",
+    "riskLevel": "low"
+  }
+}

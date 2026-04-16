@@ -37,6 +37,7 @@ from models import (
 )
 from outputs.diffgen import generate_diff_heatmaps
 from outputs.markdown import generate_markdown_summary
+from outputs.remotion_video import render_remotion_video
 from outputs.screenshots import capture_after_screenshots, capture_before_screenshots
 from outputs.video import generate_video
 from review_parser import enrich_review_result
@@ -581,12 +582,35 @@ async def _generate_outputs(ticket: Ticket, manager: ConnectionManager) -> None:
             current_ticket, current_ticket.review_result
         )
         outputs = current_ticket.outputs.model_copy(update={"markdown_path": markdown_path})
-        update_ticket(ticket.id, outputs=outputs)
+        current_ticket = update_ticket(ticket.id, outputs=outputs)
         await manager.send_ticket_event(
             "output_ready",
             ticket.id,
             {"output_type": "markdown", "outputs": {"markdown_path": markdown_path}},
         )
+
+    # -- Remotion demo video (no server needed, data-driven from ticket) --
+    if current_ticket.review_result is not None:
+        try:
+            remotion_path = await render_remotion_video(current_ticket)
+            outputs = current_ticket.outputs.model_copy(
+                update={"remotion_video_path": remotion_path}
+            )
+            current_ticket = update_ticket(ticket.id, outputs=outputs)
+            await manager.send_ticket_event(
+                "output_ready",
+                ticket.id,
+                {
+                    "output_type": "remotion_video",
+                    "outputs": {"remotion_video_path": remotion_path},
+                },
+            )
+        except Exception:
+            logger.warning(
+                "Remotion video render failed for ticket %s, skipping",
+                ticket.id,
+                exc_info=True,
+            )
 
 
 # ------------------------------------------------------------------

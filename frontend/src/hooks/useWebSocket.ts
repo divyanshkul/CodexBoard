@@ -38,6 +38,13 @@ function mapOutputUpdate(
           (outputs as { path?: string }).path ??
           null,
       };
+    case "remotion_video":
+      return {
+        remotion_video_path:
+          (outputs as { remotion_video_path?: string; path?: string }).remotion_video_path ??
+          (outputs as { path?: string }).path ??
+          null,
+      };
     case "markdown":
       return {
         markdown_path:
